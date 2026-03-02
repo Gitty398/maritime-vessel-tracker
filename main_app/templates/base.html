@@ -1,0 +1,38 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <img src="{% static 'images/Vessel Tracker Logo_Horizontal.png' %}" alt="Maritime Vessel Tracker Logo" />
+
+    <title>Maritime Vessel Tracker</title>
+    <link rel="stylesheet" href="{% static 'css/base.css' %}" />
+
+
+    {% block head %} 
+    {% endblock %}
+
+  </head>
+  <body>
+    <header>
+      <div class="header-logo-container">
+        <a href="/">
+          <img src="images/Vessel Tracker Logo_Horizontal.png" alt="The Maritime Vessel Tracker Logo" class='logo'/>
+        </a>
+      </div>
+      <nav>
+        <ul>
+          <li><a href="/myvessels">My Vessels</a></li>
+        </ul>
+      </nav>
+    </header>
+    <main>
+
+     {% block content %} 
+     {% endblock %}
+
+     </main>
+  </body>
+</html>
