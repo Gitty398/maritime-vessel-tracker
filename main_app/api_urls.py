@@ -1,7 +1,13 @@
 from django.urls import path
-from .api_views import NearbyVesselsSearchAPIView, SaveVesselsAPIView
+from . import api_views
 
 urlpatterns = [
-    path("search/nearby/", NearbyVesselsSearchAPIView.as_view(), name="api-search-nearby"),
-    path("my-vessels/save/", SaveVesselsAPIView.as_view(), name="api-my-vessels-save"),
+    path("search/target/", api_views.TargetSearchAPIView.as_view()),
+    path("my-vessels/save/", api_views.save_vessels),
+
+    path("my-vessels/", api_views.SavedVesselListCreateAPIView.as_view()),
+    path("my-vessels/<int:pk>/", api_views.SavedVesselDetailAPIView.as_view()),
+
+    path("my-vessels/<int:vessel_id>/locations/", api_views.VesselLocationListAPIView.as_view()),
+    path("my-vessels/<int:vessel_id>/locations/create/", api_views.VesselLocationCreateAPIView.as_view()),
 ]

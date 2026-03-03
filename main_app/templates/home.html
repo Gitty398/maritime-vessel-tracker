@@ -1,22 +1,179 @@
+{% extends "base.html" %}
 
-{% extends 'base.html' %} {% load static %} {% block head %}
-<link
-  rel="stylesheet"
-  href="{% static 'css/home.css' %}"
-/>
-{% endblock %} {% block content %}
+{% block content %}
+<h1>Maritime Vessel Tracker</h1>
 
-<section class="logo-container">
-  <div class="marker-container">
-    <img
-      {% comment %} src="{% static 'images/splash.svg' %}"
-      alt="The Cat Collector Cat" {% endcomment %}
-    />
-  </div>
-  <img
-    {% comment %} src="{% static 'images/logotype.svg' %}"
-    alt="Text reads: Cat Collector" {% endcomment %}
-  />
-</section>
+<h2>Search by defining your bounding box</h2>
+<form id="searchForm">
+  {% csrf_token %}
+  <label>
+    Lat:
+    <input name="lat" type="number" step="any" required>
+  </label>
+  <label>
+    Lon:
+    <input name="lon" type="number" step="any" required>
+  </label>
+  <label>
+    Radius (nm):
+    <input name="radius_nm" type="number" step="any" value="10">
+  </label>
+  <button type="submit">Search</button>
+</form>
 
+<p id="msg"></p>
+
+<form id="saveForm">
+  <h2>Results</h2>
+
+  <table border="1" cellpadding="6" cellspacing="0" style="width:100%; max-width:1000px;">
+    <thead>
+      <tr>
+        <th></th>
+        <th>Name</th>
+        <th>MMSI</th>
+        <th>Lat</th>
+        <th>Lng</th>
+        <th>TS</th>
+      </tr>
+    </thead>
+    <tbody id="resultsBody">
+      <tr><td colspan="6">No results yet.</td></tr>
+    </tbody>
+  </table>
+
+  <br>
+  <button type="submit">Save selected</button>
+</form>
+
+<script>
+  function getCookie(name) {
+    const value = `; ${document.cookie}`;
+    const parts = value.split(`; ${name}=`);
+    if (parts.length === 2) return parts.pop().split(";").shift();
+  }
+  const csrftoken = getCookie("csrftoken");
+
+  const msg = document.getElementById("msg");
+  const resultsBody = document.getElementById("resultsBody");
+  const searchForm = document.getElementById("searchForm");
+  const saveForm = document.getElementById("saveForm");
+
+  let lastResults = [];
+
+  function renderResults(vessels) {
+    lastResults = vessels || [];
+    resultsBody.innerHTML = "";
+
+    if (!lastResults.length) {
+      resultsBody.innerHTML = `<tr><td colspan="6">No vessels found.</td></tr>`;
+      return;
+    }
+
+    for (let i = 0; i < lastResults.length; i++) {
+      const v = lastResults[i];
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td><input type="checkbox" data-index="${i}"></td>
+        <td>${v.name ?? "Unknown"}</td>
+        <td>${v.mmsi ?? ""}</td>
+        <td>${v.lat ?? ""}</td>
+        <td>${v.lng ?? ""}</td>
+        <td>${v.ts ?? ""}</td>
+      `;
+      resultsBody.appendChild(tr);
+    }
+  }
+
+  searchForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    msg.textContent = "Searching...";
+
+    const formData = new FormData(searchForm);
+    const lat = parseFloat(formData.get("lat"));
+    const lon = parseFloat(formData.get("lon"));
+    const radius_nm = parseFloat(formData.get("radius_nm") || "10");
+
+    try {
+      const resp = await fetch("/api/search/nearby/", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRFToken": csrftoken || "",
+        },
+        body: JSON.stringify({ lat, lon, radius_nm }),
+      });
+
+      const payload = await resp.json();
+
+      if (!resp.ok || payload?.error) {
+        msg.textContent = payload?.message || `Search failed (HTTP ${resp.status})`;
+        renderResults([]);
+        return;
+      }
+
+      msg.textContent = payload.message || "Done";
+      renderResults(payload.data || []);
+    } catch (err) {
+      msg.textContent = "Network error";
+      renderResults([]);
+    }
+  });
+
+  saveForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+
+    const checked = Array.from(resultsBody.querySelectorAll("input[type='checkbox']:checked"));
+    if (!checked.length) {
+      msg.textContent = "Select at least one vessel to save.";
+      return;
+    }
+
+    const vessels = checked.map(cb => {
+      const v = lastResults[parseInt(cb.dataset.index, 10)];
+
+      return {
+        mmsi: v.mmsi,
+        name: v.name ?? "",
+        imo: v.imo ?? "",
+        lat: v.lat ?? null,
+        lng: v.lng ?? null,
+        sog: v.sog ?? null,
+        cog: v.cog ?? null,
+        status: v.status ?? null,
+        dest: v.dest ?? null,
+        eta: v.eta ?? null,
+        draught: v.draught ?? null,
+        ts: v.ts ?? null,
+      };
+    });
+
+    msg.textContent = "Saving...";
+
+    try {
+      const resp = await fetch("/api/my-vessels/save/", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRFToken": csrftoken || "",
+        },
+        body: JSON.stringify({ vessels }),
+      });
+
+      const payload = await resp.json().catch(() => ({}));
+
+      if (!resp.ok || payload?.error) {
+        const hint = resp.status === 403 ? " (log in first)" : "";
+        msg.textContent = (payload?.message || `Save failed (HTTP ${resp.status})`) + hint;
+        return;
+      }
+
+      msg.textContent = payload.message || "Saved!";
+
+      checked.forEach(cb => cb.checked = false);
+    } catch (err) {
+      msg.textContent = "Network error saving vessels";
+    }
+  });
+</script>
 {% endblock %}
