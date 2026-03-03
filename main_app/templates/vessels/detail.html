@@ -1,0 +1,19 @@
+{% extends 'base.html' %} 
+{% load static %}
+
+{% block head %}
+{% comment %} <link rel="stylesheet" href="{% static 'css/markers/marker-detail.css' %}" /> {% endcomment %}
+{% endblock %}
+
+{% block content %}
+<section class="vessel-container">
+  <div class="vessel-img">
+    {% comment %} <img src="{% static 'images/sk8r-boi-cat.svg' %}" alt="A skater boy cat" /> {% endcomment %}
+  </div>
+  <div class="vessel-details">
+    <h1>{{ vessel.name }}</h1>
+      <h2>A {{ marker.mmsi }}</h2>
+    <p>{{ vessel.draught}}</p>
+  </div>
+</section>
+{% endblock %}
