@@ -8,6 +8,7 @@ django = "*"
 python-dotenv = "*"
 djangorestframework = "*"
 psycopg2-binary = "*"
+requests = "*"
 
 [dev-packages]
 

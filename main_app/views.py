@@ -1,13 +1,16 @@
+from django.contrib.auth.decorators import login_required
 from django.shortcuts import render
-from django.http import HttpResponse
+from .models import SavedVessel
 
 def home(request):
     return render(request, 'home.html')
 
 
-def myvessels(request):
-    return render(request, 'myvessels.html')
-
-
-def search(request):
-    return
+@login_required
+def my_vessels(request):
+    vessels = (
+        SavedVessel.objects
+        .filter(user=request.user)
+        .order_by("-created_at")
+    )
+    return render(request, "my_vessels.html", {"vessels": vessels})
