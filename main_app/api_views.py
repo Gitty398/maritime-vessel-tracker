@@ -2,8 +2,11 @@ import math
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status, permissions
+from django.db import transaction
 
 from .services.marinesia import vessels_nearby_bbox, MarinesiaError
+from .models import SavedVessel, VesselPosition
+from .serializers import SaveVesselsRequestSerializer
 
 
 def radius_nm_to_bbox(lat: float, lon: float, radius_nm: float):
@@ -55,3 +58,87 @@ class NearbyVesselsSearchAPIView(APIView):
             )
 
         return Response(data, status=status.HTTP_200_OK)
+    
+
+class SaveVesselsAPIView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    @transaction.atomic
+    def post(self, request):
+        ser = SaveVesselsRequestSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+
+        vessels = ser.validated_data["vessels"]
+
+        created_count = 0
+        position_count = 0
+        out = []
+
+        for v in vessels:
+            mmsi = v["mmsi"]
+            name = (v.get("name") or "").strip()
+            imo = (v.get("imo") or "").strip()
+
+            saved, created = SavedVessel.objects.get_or_create(
+                user=request.user,
+                mmsi=mmsi,
+                defaults={"name": name, "imo": imo},
+            )
+
+            # Keep metadata updated
+            changed = False
+            if name and saved.name != name:
+                saved.name = name
+                changed = True
+            if imo and saved.imo != imo:
+                saved.imo = imo
+                changed = True
+            if changed:
+                saved.save(update_fields=["name", "imo"])
+
+            if created:
+                created_count += 1
+
+            # Automatic location ingestion (only if ts newer than latest)
+            lat = v.get("lat")
+            lng = v.get("lng")
+            ts = v.get("ts")  # already parsed datetime or None
+
+            if lat is not None and lng is not None and ts is not None:
+                latest = saved.latest_position
+                latest_ts = latest.ts if latest else None
+
+                if latest_ts is None or ts > latest_ts:
+                    VesselPosition.objects.create(
+                        vessel=saved,
+                        lat=lat,
+                        lng=lng,
+                        sog=v.get("sog"),
+                        cog=v.get("cog"),
+                        status=v.get("status"),
+                        dest=v.get("dest"),
+                        eta=v.get("eta"),
+                        draught=v.get("draught"),
+                        ts=ts,
+                        raw=v,
+                    )
+                    position_count += 1
+
+            out.append(
+                {
+                    "id": saved.id,
+                    "mmsi": saved.mmsi,
+                    "name": saved.name,
+                    "imo": saved.imo or None,
+                    "created_at": saved.created_at,
+                }
+            )
+
+        return Response(
+            {
+                "error": False,
+                "message": f"Saved {created_count} new vessel(s). Added {position_count} position point(s).",
+                "data": out,
+            },
+            status=status.HTTP_201_CREATED,
+        )
