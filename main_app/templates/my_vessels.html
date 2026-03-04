@@ -1,74 +1,52 @@
 {% extends "base.html" %}
 
 {% block content %}
-  <section class="page-header">
-    <h1>My Vessels</h1>
-  </section>
+<h1>My Vessels</h1>
 
-  <section class="page-content">
-    {% if vessels %}
-      <div style="overflow:auto;">
-        <table style="width:100%; border-collapse:collapse;">
-          <thead>
-            <tr>
-              <th style="text-align:left; padding:10px; border-bottom:1px solid #ddd;">Name</th>
-              <th style="text-align:left; padding:10px; border-bottom:1px solid #ddd;">MMSI</th>
-              <th style="text-align:left; padding:10px; border-bottom:1px solid #ddd;">IMO</th>
-              <th style="text-align:left; padding:10px; border-bottom:1px solid #ddd;">Latest Position</th>
-              <th style="text-align:left; padding:10px; border-bottom:1px solid #ddd;">Updated</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for v in vessels %}
-              {% with p=v.latest_position %}
-              <tr>
-                <td style="padding:10px; border-bottom:1px solid #eee;">
-                  {{ v.name|default:"(Unnamed)" }}
-                </td>
-                <td style="padding:10px; border-bottom:1px solid #eee;">
-                  {{ v.mmsi }}
-                </td>
-                <td style="padding:10px; border-bottom:1px solid #eee;">
-                  {{ v.imo|default:"—" }}
-                </td>
+{% if vessels %}
+<table border="1" cellpadding="6" cellspacing="0" style="width:100%; max-width:1000px;">
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>MMSI</th>
+      <th>IMO</th>
+      <th>Lat</th>
+      <th>Lng</th>
+      <th>Timestamp</th>
+      <th>Delete</th>
+    </tr>
+  </thead>
 
-                <td style="padding:10px; border-bottom:1px solid #eee;">
-                  {% if p %}
-                    <div style="display:flex; flex-direction:column; gap:2px;">
-                      <span><strong>Lat:</strong> {{ p.lat }} <strong>Lng:</strong> {{ p.lng }}</span>
-                      <span>
-                        <strong>SOG:</strong> {{ p.sog|default:"—" }}
-                        <strong>COG:</strong> {{ p.cog|default:"—" }}
-                        <strong>Status:</strong> {{ p.status|default:"—" }}
-                      </span>
-                      {% if p.dest %}<span><strong>Dest:</strong> {{ p.dest }}</span>{% endif %}
-                      {% if p.eta %}<span><strong>ETA:</strong> {{ p.eta }}</span>{% endif %}
-                    </div>
-                  {% else %}
-                    —
-                  {% endif %}
-                </td>
+  <tbody>
+  {% for v in vessels %}
+    {% with p=v.latest_position %}
+    <tr>
+      <td>{{ v.name|default:"(Unnamed)" }}</td>
+      <td>{{ v.mmsi }}</td>
+      <td>{{ v.imo|default:"—" }}</td>
 
-                <td style="padding:10px; border-bottom:1px solid #eee;">
-                  {% if p %}
-                    {{ p.ts|default:p.created_at }}
-                  {% else %}
-                    {{ v.created_at }}
-                  {% endif %}
-                </td>
-              </tr>
-              {% endwith %}
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
-    {% else %}
-      <p>You don't have any saved vessels yet.</p>
-      <p>Use the Nearby Search endpoint to find vessels, then save them.</p>
-    {% endif %}
+      <td>{% if p %}{{ p.lat }}{% else %}—{% endif %}</td>
+      <td>{% if p %}{{ p.lng }}{% else %}—{% endif %}</td>
+      <td>{% if p %}{{ p.ts }}{% else %}—{% endif %}</td>
 
-    <div style="margin-top:18px;">
-      <a class="btn secondary" href="/">Back to Home</a>
-    </div>
-  </section>
+      <td>
+        <form method="post" action="{% url 'myvessels_delete' v.id %}">
+          {% csrf_token %}
+          <button type="submit" onclick="return confirm('Delete this vessel?')">
+            Delete
+          </button>
+        </form>
+      </td>
+    </tr>
+    {% endwith %}
+  {% endfor %}
+  </tbody>
+</table>
+
+{% else %}
+<p>You haven't saved any vessels yet.</p>
+{% endif %}
+
+<br>
+<a href="/">Back to Home</a>
 {% endblock %}
