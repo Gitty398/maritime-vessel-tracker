@@ -11,6 +11,16 @@ def vessels_in_bbox(lat_min, lat_max, lon_min, lon_max):
         "long_min": lon_min,
         "long_max": lon_max,
     }
-    r = requests.get(f"{BASE_URL}/vessel/nearby", params=params, timeout=12)
+    r = requests.get(f"{BASE_URL}/vessel/nearby", params=params, timeout=30)
+    r.raise_for_status()
+    return r.json()
+
+
+def updated_vessel_location(mmsi):
+    params = {
+        "key": settings.MARINESIA_API_KEY,
+        "mmsi": mmsi,
+    }
+    r = requests.get(f"{BASE_URL}/vessel/{mmsi}/location/latest", params=params, timeout=30)
     r.raise_for_status()
     return r.json()

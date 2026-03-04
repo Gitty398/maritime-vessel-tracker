@@ -30,6 +30,7 @@ def my_vessels(request):
 
 @login_required
 @require_POST
+
 def my_vessels_delete(request, pk):
     v = get_object_or_404(SavedVessel, pk=pk, user=request.user)
     v.delete()

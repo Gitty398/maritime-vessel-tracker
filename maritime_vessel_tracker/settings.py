@@ -30,6 +30,8 @@ DEBUG = os.getenv("DEBUG", "False").strip().lower() in ("1", "true", "yes", "on"
 ALLOWED_HOSTS = [h.strip() for h in os.getenv("ALLOWED_HOSTS", "").split(",") if h.strip()]
 
 MARINESIA_API_KEY = os.getenv("MARINESIA_API_KEY")
+MST_API_KEY=os.getenv("MST_API_KEY")
+
 
 # Application definition
 
