@@ -28,18 +28,24 @@
   {% for v in vessels %}
     {% with p=v.latest_position %}
     <tr>
-      <td>{{ v.name|default:"(Unnamed)" }}</td>
-      <td>{{ v.mmsi }}</td>
-      <td>{{ v.imo|default:"—" }}</td>
 
-      <td>{% if p %}{{ p.lat }}{% else %}—{% endif %}</td>
-      <td>{% if p %}{{ p.lng }}{% else %}—{% endif %}</td>
-      <td>{% if p %}{{ p.ts }}{% else %}—{% endif %}</td>
       <td>
-        <form method="post" action="/api/my-vessels/{{ v.mmsi }}/update-location/">
-          {% csrf_token %}
-          <button type="submit">Update location</button>
-        </form>
+        <a href="{% url 'myvessels_detail' v.id %}">
+          {{ v.name|default:"(Unnamed)" }}
+        </a>
+      </td>
+
+        <td>{{ v.mmsi }}</td>
+        <td>{{ v.imo|default:"—" }}</td>
+
+        <td>{% if p %}{{ p.lat }}{% else %}—{% endif %}</td>
+        <td>{% if p %}{{ p.lng }}{% else %}—{% endif %}</td>
+        <td>{% if p %}{{ p.ts }}{% else %}—{% endif %}</td>
+        <td>
+          <form method="post" action="/api/my-vessels/{{ v.mmsi }}/update-location/">
+            {% csrf_token %}
+            <button type="submit">Update location</button>
+          </form>
       </td>
       <td>
         <form method="post" action="{% url 'myvessels_delete' v.id %}">

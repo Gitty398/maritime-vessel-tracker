@@ -109,77 +109,77 @@ def save_vessels(request):
 
     return Response({"error": False, "data": out}, status=201)
 
-class SavedVesselListCreateAPIView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
+# class SavedVesselListCreateAPIView(APIView):
+#     permission_classes = [permissions.IsAuthenticated]
 
-    def get(self, request):
-        qs = SavedVessel.objects.filter(user=request.user).order_by("-id")
-        return Response([{"id": v.id, "mmsi": v.mmsi, "name": v.name, "imo": v.imo} for v in qs])
+#     def get(self, request):
+#         qs = SavedVessel.objects.filter(user=request.user).order_by("-id")
+#         return Response([{"id": v.id, "mmsi": v.mmsi, "name": v.name, "imo": v.imo} for v in qs])
 
-    def post(self, request):
-        v = SavedVessel.objects.create(
-            user=request.user,
-            mmsi=request.data["mmsi"],
-            name=request.data.get("name", ""),
-            imo=str(request.data.get("imo", "") or ""),
-            raw=request.data.get("raw", {}),
-        )
-        return Response({"id": v.id}, status=status.HTTP_201_CREATED)
-
-
-class SavedVesselDetailAPIView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
-
-    def get_object(self, request, pk):
-        return get_object_or_404(SavedVessel, pk=pk, user=request.user)
-
-    def get(self, request, pk):
-        v = self.get_object(request, pk)
-        return Response({"id": v.id, "mmsi": v.mmsi, "name": v.name, "imo": v.imo, "raw": v.raw})
-
-    def put(self, request, pk):
-        v = self.get_object(request, pk)
-        v.name = request.data.get("name", v.name)
-        v.imo = str(request.data.get("imo", v.imo) or "")
-        v.save()
-        return Response({"ok": True})
-
-    def delete(self, request, pk):
-        v = self.get_object(request, pk)
-        v.delete()
-        return Response(status=status.HTTP_204_NO_CONTENT)
+#     def post(self, request):
+#         v = SavedVessel.objects.create(
+#             user=request.user,
+#             mmsi=request.data["mmsi"],
+#             name=request.data.get("name", ""),
+#             imo=str(request.data.get("imo", "") or ""),
+#             raw=request.data.get("raw", {}),
+#         )
+#         return Response({"id": v.id}, status=status.HTTP_201_CREATED)
 
 
-class VesselLocationCreateAPIView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
+# class SavedVesselDetailAPIView(APIView):
+#     permission_classes = [permissions.IsAuthenticated]
 
-    def post(self, request, vessel_id):
-        vessel = get_object_or_404(SavedVessel, pk=vessel_id, user=request.user)
+#     def get_object(self, request, pk):
+#         return get_object_or_404(SavedVessel, pk=pk, user=request.user)
 
-        try:
-            loc = VesselLocation.objects.create(
-                vessel=vessel,
-                lat=request.data["lat"],
-                lng=request.data["lng"],
-                sog=request.data.get("sog"),
-                cog=request.data.get("cog"),
-                ts=request.data["ts"],
-                raw=request.data,
-            )
-        except IntegrityError:
-            return Response({"error": True, "message": "Location at this ts already exists."},
-                            status=status.HTTP_409_CONFLICT)
+#     def get(self, request, pk):
+#         v = self.get_object(request, pk)
+#         return Response({"id": v.id, "mmsi": v.mmsi, "name": v.name, "imo": v.imo, "raw": v.raw})
 
-        return Response({"id": loc.id}, status=status.HTTP_201_CREATED)
+#     def put(self, request, pk):
+#         v = self.get_object(request, pk)
+#         v.name = request.data.get("name", v.name)
+#         v.imo = str(request.data.get("imo", v.imo) or "")
+#         v.save()
+#         return Response({"ok": True})
+
+#     def delete(self, request, pk):
+#         v = self.get_object(request, pk)
+#         v.delete()
+#         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
-class VesselLocationListAPIView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
+# class VesselLocationCreateAPIView(APIView):
+#     permission_classes = [permissions.IsAuthenticated]
 
-    def get(self, request, vessel_id):
-        vessel = get_object_or_404(SavedVessel, pk=vessel_id, user=request.user)
-        locations = vessel.locations.all()
-        return Response([{"id": l.id, "lat": l.lat, "lng": l.lng, "ts": l.ts} for l in locations])
+#     def post(self, request, vessel_id):
+#         vessel = get_object_or_404(SavedVessel, pk=vessel_id, user=request.user)
+
+#         try:
+#             loc = VesselLocation.objects.create(
+#                 vessel=vessel,
+#                 lat=request.data["lat"],
+#                 lng=request.data["lng"],
+#                 sog=request.data.get("sog"),
+#                 cog=request.data.get("cog"),
+#                 ts=request.data["ts"],
+#                 raw=request.data,
+#             )
+#         except IntegrityError:
+#             return Response({"error": True, "message": "Location at this ts already exists."},
+#                             status=status.HTTP_409_CONFLICT)
+
+#         return Response({"id": loc.id}, status=status.HTTP_201_CREATED)
+
+
+# class VesselLocationListAPIView(APIView):
+#     permission_classes = [permissions.IsAuthenticated]
+
+#     def get(self, request, vessel_id):
+#         vessel = get_object_or_404(SavedVessel, pk=vessel_id, user=request.user)
+#         locations = vessel.locations.all()
+#         return Response([{"id": l.id, "lat": l.lat, "lng": l.lng, "ts": l.ts} for l in locations])
     
 
 

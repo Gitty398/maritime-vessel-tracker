@@ -3,23 +3,76 @@
 {% block content %}
 <h1>Maritime Vessel Tracker</h1>
 
+<h2>Pick a point on the map (fills Lat/Lon)</h2>
+
+{% comment %} <!------------------------------------- Leaflet CSS --------------------------------> {% endcomment %}
+<link
+  rel="stylesheet"
+  href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+/>
+
+<div
+  id="map"
+  style="height: 420px; width: 100%; max-width: 1000px; border: 1px solid #ddd; border-radius: 8px; margin-bottom: 16px;"
+></div>
+
 <h2>Search by defining your bounding box</h2>
 <form id="searchForm">
   {% csrf_token %}
+
   <label>
     Lat:
-    <input name="lat" type="number" step="any" required>
+    <input id="latInput" name="lat" type="number" step="any" required>
   </label>
+
   <label>
     Lon:
-    <input name="lon" type="number" step="any" required>
+    <input id="lonInput" name="lon" type="number" step="any" required>
   </label>
+
   <label>
     Radius (nm):
     <input name="radius_nm" type="number" step="any" value="10">
   </label>
+
   <button type="submit">Search</button>
 </form>
+
+<p style="margin-top:8px; color:#555;">
+  Tip: click the map to autofill Lat/Lon.
+</p>
+
+{% comment %} <!----------------------------------- Leaflet JS -------------------------------------------> {% endcomment %}
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script>
+  const startLat = 40.70;
+  const startLon = -74.00;
+  const startZoom = 9;
+
+  const map = L.map("map").setView([startLat, startLon], startZoom);
+
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 19,
+    attribution: '&copy; OpenStreetMap contributors'
+  }).addTo(map);
+
+  let marker = null;
+
+  function setLatLon(lat, lon) {
+    document.getElementById("latInput").value = Number(lat).toFixed(6);
+    document.getElementById("lonInput").value = Number(lon).toFixed(6);
+  }
+
+  map.on("click", (e) => {
+    const { lat, lng } = e.latlng;
+
+    if (marker) marker.remove();
+    marker = L.marker([lat, lng]).addTo(map);
+
+    setLatLon(lat, lng);
+  });
+</script>
 
 <p id="msg"></p>
 
