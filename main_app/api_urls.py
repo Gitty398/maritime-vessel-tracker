@@ -3,7 +3,7 @@ from . import api_views
 
 urlpatterns = [
     path("search/nearby/", api_views.NearbySearchAPIView.as_view()),
-    path("my-vessels/save/", api_views.save_vessels),
+    # path("my-vessels/save/", api_views.save_vessels),
     
     # path("my-vessels/", api_views.SavedVesselListCreateAPIView.as_view()),
     # path("my-vessels/<int:pk>/", api_views.SavedVesselDetailAPIView.as_view()),

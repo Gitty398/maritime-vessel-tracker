@@ -1,232 +1,113 @@
 {% extends "base.html" %}
-
 {% block content %}
 <h1>Maritime Vessel Tracker</h1>
 
-<h2>Pick a point on the map (fills Lat/Lon)</h2>
+<h2>Search nearby vessels</h2>
 
-{% comment %} <!------------------------------------- Leaflet CSS --------------------------------> {% endcomment %}
-<link
-  rel="stylesheet"
-  href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-/>
-
-<div
-  id="map"
-  style="height: 420px; width: 100%; max-width: 1000px; border: 1px solid #ddd; border-radius: 8px; margin-bottom: 16px;"
-></div>
-
-<h2>Search by defining your bounding box</h2>
-<form id="searchForm">
+<form method="post">
   {% csrf_token %}
 
-  <label>
-    Lat:
-    <input id="latInput" name="lat" type="number" step="any" required>
+  <label>Lat:
+    <input id="latInput" name="lat" type="number" step="any" required value="{{ request.POST.lat }}">
   </label>
 
-  <label>
-    Lon:
-    <input id="lonInput" name="lon" type="number" step="any" required>
+  <label>Lon:
+    <input id="lonInput" name="lon" type="number" step="any" required value="{{ request.POST.lon }}">
   </label>
 
-  <label>
-    Radius (nm):
-    <input name="radius_nm" type="number" step="any" value="10">
+  <label>Radius (nm):
+    <input name="radius_nm" type="number" step="any" value="{{ request.POST.radius_nm|default:'10' }}">
   </label>
 
   <button type="submit">Search</button>
 </form>
 
-<p style="margin-top:8px; color:#555;">
-  Tip: click the map to autofill Lat/Lon.
-</p>
+{% if error %}
+  <p style="color:red;">{{ error }}</p>
+{% endif %}
 
-{% comment %} <!----------------------------------- Leaflet JS -------------------------------------------> {% endcomment %}
+<!-- ✅ Map container -->
+<div id="map" style="height: 420px; width: 100%; max-width: 1000px; margin: 16px 0;"></div>
+
+<h2>Results</h2>
+
+<table border="1" cellpadding="6" cellspacing="0" style="width:100%; max-width:1000px;">
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>MMSI</th>
+      <th>Lat</th>
+      <th>Lng</th>
+      <th>Received</th>
+      <th>Add</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% if results %}
+      {% for v in results %}
+        <tr>
+          <td>{{ v.vessel_name|default:"—" }}</td>
+          <td>{{ v.mmsi }}</td>
+          <td>{{ v.lat }}</td>
+          <td>{{ v.lng }}</td>
+          <td>{{ v.received }}</td>
+          <td>
+            <form method="post" action="{% url 'add_vessel_from_search' %}">
+              {% csrf_token %}
+              <input type="hidden" name="mmsi" value="{{ v.mmsi }}">
+              <input type="hidden" name="name" value="{{ v.vessel_name }}">
+              <input type="hidden" name="imo" value="{{ v.imo }}">
+              <input type="hidden" name="lat" value="{{ v.lat }}">
+              <input type="hidden" name="lng" value="{{ v.lng }}">
+              <input type="hidden" name="received" value="{{ v.received }}">
+              <button type="submit">Add Vessel</button>
+            </form>
+          </td>
+        </tr>
+      {% endfor %}
+    {% else %}
+      <tr><td colspan="6">No results yet.</td></tr>
+    {% endif %}
+  </tbody>
+</table>
+
+<br>
+<a href="{% url 'myvessels' %}">Go to My Vessels</a>
+
+<!-- Leaflet (map) -->
+<link
+  rel="stylesheet"
+  href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
 <script>
-  const startLat = 40.70;
-  const startLon = -74.00;
-  const startZoom = 9;
+  // If you want the map to center on posted values when available:
+  const initialLat = parseFloat(document.getElementById("latInput").value || "40.7");
+  const initialLon = parseFloat(document.getElementById("lonInput").value || "-74.0");
 
-  const map = L.map("map").setView([startLat, startLon], startZoom);
+  const map = L.map("map").setView([initialLat, initialLon], 8);
 
   L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    maxZoom: 19,
-    attribution: '&copy; OpenStreetMap contributors'
+    attribution: "&copy; OpenStreetMap contributors",
   }).addTo(map);
 
   let marker = null;
 
-  function setLatLon(lat, lon) {
-    document.getElementById("latInput").value = Number(lat).toFixed(6);
-    document.getElementById("lonInput").value = Number(lon).toFixed(6);
+  // If lat/lon already filled, show marker initially
+  if (!Number.isNaN(initialLat) && !Number.isNaN(initialLon)) {
+    marker = L.marker([initialLat, initialLon]).addTo(map);
   }
 
   map.on("click", (e) => {
-    const { lat, lng } = e.latlng;
+    const lat = e.latlng.lat.toFixed(6);
+    const lon = e.latlng.lng.toFixed(6);
+
+    document.getElementById("latInput").value = lat;
+    document.getElementById("lonInput").value = lon;
 
     if (marker) marker.remove();
-    marker = L.marker([lat, lng]).addTo(map);
-
-    setLatLon(lat, lng);
-  });
-</script>
-
-<p id="msg"></p>
-
-<form id="saveForm">
-  <h2>Results</h2>
-
-  <table border="1" cellpadding="6" cellspacing="0" style="width:100%; max-width:1000px;">
-    <thead>
-      <tr>
-        <th></th>
-        <th>Name</th>
-        <th>MMSI</th>
-        <th>Lat</th>
-        <th>Lng</th>
-        <th>TS</th>
-      </tr>
-    </thead>
-    <tbody id="resultsBody">
-      <tr><td colspan="6">No results yet.</td></tr>
-    </tbody>
-  </table>
-
-  <br>
-  <button type="submit">Save selected</button>
-</form>
-
-<script>
-  function getCookie(name) {
-    const value = `; ${document.cookie}`;
-    const parts = value.split(`; ${name}=`);
-    if (parts.length === 2) return parts.pop().split(";").shift();
-  }
-  const csrftoken = getCookie("csrftoken");
-
-  const msg = document.getElementById("msg");
-  const resultsBody = document.getElementById("resultsBody");
-  const searchForm = document.getElementById("searchForm");
-  const saveForm = document.getElementById("saveForm");
-
-  let lastResults = [];
-
-  function renderResults(vessels) {
-    lastResults = vessels || [];
-    resultsBody.innerHTML = "";
-
-    if (!lastResults.length) {
-      resultsBody.innerHTML = `<tr><td colspan="6">No vessels found.</td></tr>`;
-      return;
-    }
-
-    for (let i = 0; i < lastResults.length; i++) {
-      const v = lastResults[i];
-      const tr = document.createElement("tr");
-      tr.innerHTML = `
-        <td><input type="checkbox" data-index="${i}"></td>
-        <td>${v.name ?? "Unknown"}</td>
-        <td>${v.mmsi ?? ""}</td>
-        <td>${v.lat ?? ""}</td>
-        <td>${v.lng ?? ""}</td>
-        <td>${v.ts ?? ""}</td>
-      `;
-      resultsBody.appendChild(tr);
-    }
-  }
-
-  searchForm.addEventListener("submit", async (e) => {
-    e.preventDefault();
-    msg.textContent = "Searching...";
-
-    const formData = new FormData(searchForm);
-    const lat = parseFloat(formData.get("lat"));
-    const lon = parseFloat(formData.get("lon"));
-    const radius_nm = parseFloat(formData.get("radius_nm") || "10");
-
-    try {
-      const resp = await fetch("/api/search/nearby/", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-CSRFToken": csrftoken || "",
-        },
-        body: JSON.stringify({ lat, lon, radius_nm }),
-      });
-
-      const payload = await resp.json();
-
-      if (!resp.ok || payload?.error) {
-        msg.textContent = payload?.message || `Search failed (HTTP ${resp.status})`;
-        renderResults([]);
-        return;
-      }
-
-      msg.textContent = payload.message || "Done";
-      renderResults(payload.data || []);
-    } catch (err) {
-      msg.textContent = "Network error";
-      renderResults([]);
-    }
-  });
-
-  saveForm.addEventListener("submit", async (e) => {
-    e.preventDefault();
-
-    const checked = Array.from(resultsBody.querySelectorAll("input[type='checkbox']:checked"));
-    if (!checked.length) {
-      msg.textContent = "Select at least one vessel to save.";
-      return;
-    }
-
-    const vessels = checked.map(cb => {
-      const v = lastResults[parseInt(cb.dataset.index, 10)];
-
-      return {
-        mmsi: v.mmsi,
-        name: v.name ?? "",
-        imo: v.imo ?? "",
-        lat: v.lat ?? null,
-        lng: v.lng ?? null,
-        sog: v.sog ?? null,
-        cog: v.cog ?? null,
-        status: v.status ?? null,
-        dest: v.dest ?? null,
-        eta: v.eta ?? null,
-        draught: v.draught ?? null,
-        ts: v.ts ?? null,
-      };
-    });
-
-    msg.textContent = "Saving...";
-
-    try {
-      const resp = await fetch("/api/my-vessels/save/", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-CSRFToken": csrftoken || "",
-        },
-        body: JSON.stringify({ vessels }),
-      });
-
-      const payload = await resp.json().catch(() => ({}));
-
-      if (!resp.ok || payload?.error) {
-        const hint = resp.status === 403 ? " (log in first)" : "";
-        msg.textContent = (payload?.message || `Save failed (HTTP ${resp.status})`) + hint;
-        return;
-      }
-
-      msg.textContent = payload.message || "Saved!";
-
-      checked.forEach(cb => cb.checked = false);
-    } catch (err) {
-      msg.textContent = "Network error saving vessels";
-    }
+    marker = L.marker([lat, lon]).addTo(map);
   });
 </script>
 {% endblock %}
