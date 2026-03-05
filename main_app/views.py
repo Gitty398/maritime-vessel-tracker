@@ -20,7 +20,8 @@ def signup(request):
 
     return render(request, "registration/signup.html", {"form": form})
 
-
+def home(request):
+    return render(request, "home.html")
 
 @login_required
 def my_vessels(request):
