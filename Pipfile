@@ -9,6 +9,8 @@ python-dotenv = "*"
 djangorestframework = "*"
 psycopg2-binary = "*"
 requests = "*"
+websockets = "*"
+asyncio = "*"
 
 [dev-packages]
 

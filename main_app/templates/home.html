@@ -4,77 +4,112 @@
 
 <h2>Search nearby vessels</h2>
 
-<form method="post">
+<form method="post" style="display:flex; flex-wrap:wrap; gap:12px; align-items:flex-end; max-width:1000px;">
   {% csrf_token %}
 
-  <label>Lat:
-    <input id="latInput" name="lat" type="number" step="any" required value="{{ request.POST.lat }}">
+  <label style="display:flex; flex-direction:column; gap:4px;">
+    <span>Lat</span>
+    <input
+      id="latInput"
+      name="lat"
+      type="number"
+      step="any"
+      required
+      value="{{ request.POST.lat|default:'' }}"
+    >
   </label>
 
-  <label>Lon:
-    <input id="lonInput" name="lon" type="number" step="any" required value="{{ request.POST.lon }}">
+  <label style="display:flex; flex-direction:column; gap:4px;">
+    <span>Lon</span>
+    <input
+      id="lonInput"
+      name="lon"
+      type="number"
+      step="any"
+      required
+      value="{{ request.POST.lon|default:'' }}"
+    >
   </label>
 
-  <label>Radius (nm):
-    <input name="radius_nm" type="number" step="any" value="{{ request.POST.radius_nm|default:'10' }}">
+  <label style="display:flex; flex-direction:column; gap:4px;">
+    <span>Radius (nm)</span>
+    <input
+      name="radius_nm"
+      type="number"
+      step="any"
+      min="0"
+      value="{{ request.POST.radius_nm|default:'10' }}"
+    >
   </label>
 
-  <button type="submit">Search</button>
+  <button type="submit" style="padding:8px 14px;">Search</button>
 </form>
 
 {% if error %}
-  <p style="color:red;">{{ error }}</p>
+  <p style="color:#b00020; margin-top:10px;">{{ error }}</p>
 {% endif %}
 
-<!-- ✅ Map container -->
-<div id="map" style="height: 420px; width: 100%; max-width: 1000px; margin: 16px 0;"></div>
+
+<div id="map" style="height: 420px; width: 100%; max-width: 1000px; margin: 16px 0; border-radius:10px; overflow:hidden; border:1px solid #ddd;"></div>
+<p style="max-width:1000px; color:#555; margin-top:-6px;">
+  Tip: Click the map to set Lat/Lon.
+</p>
 
 <h2>Results</h2>
 
-<table border="1" cellpadding="6" cellspacing="0" style="width:100%; max-width:1000px;">
-  <thead>
-    <tr>
-      <th>Name</th>
-      <th>MMSI</th>
-      <th>Lat</th>
-      <th>Lng</th>
-      <th>Received</th>
-      <th>Add</th>
-    </tr>
-  </thead>
-  <tbody>
-    {% if results %}
-      {% for v in results %}
-        <tr>
-          <td>{{ v.vessel_name|default:"—" }}</td>
-          <td>{{ v.mmsi }}</td>
-          <td>{{ v.lat }}</td>
-          <td>{{ v.lng }}</td>
-          <td>{{ v.received }}</td>
-          <td>
-            <form method="post" action="{% url 'add_vessel_from_search' %}">
-              {% csrf_token %}
-              <input type="hidden" name="mmsi" value="{{ v.mmsi }}">
-              <input type="hidden" name="name" value="{{ v.vessel_name }}">
-              <input type="hidden" name="imo" value="{{ v.imo }}">
-              <input type="hidden" name="lat" value="{{ v.lat }}">
-              <input type="hidden" name="lng" value="{{ v.lng }}">
-              <input type="hidden" name="received" value="{{ v.received }}">
-              <button type="submit">Add Vessel</button>
-            </form>
-          </td>
-        </tr>
-      {% endfor %}
-    {% else %}
-      <tr><td colspan="6">No results yet.</td></tr>
-    {% endif %}
-  </tbody>
-</table>
+<div style="overflow:auto; width:100%; max-width:1000px;">
+  <table border="1" cellpadding="6" cellspacing="0" style="width:100%; border-collapse:collapse;">
+    <thead style="background:#f6f6f6;">
+      <tr>
+        <th align="left">Name</th>
+        <th align="left">MMSI</th>
+        <th align="left">IMO</th>
+        <th align="left">Lat</th>
+        <th align="left">Lng</th>
+        <th align="left">SOG</th>
+        <th align="left">COG</th>
+        <th align="left">Status</th>
+        <th align="left">TS</th>
+        <th align="left">Add</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% if results %}
+        {% for v in results %}
+          <tr>
+            <td>{{ v.name|default:"—" }}</td>
+            <td style="white-space:nowrap;">{{ v.mmsi|default:"—" }}</td>
+            <td style="white-space:nowrap;">{{ v.imo|default:"—" }}</td>
+            <td>{{ v.lat|default:"—" }}</td>
+            <td>{{ v.lng|default:"—" }}</td>
+            <td>{{ v.sog|default:"—" }}</td>
+            <td>{{ v.cog|default:"—" }}</td>
+            <td>{{ v.status|default:"—" }}</td>
+            <td style="white-space:nowrap;">{{ v.ts|default:"—" }}</td>
+            <td>
+              <form method="post" action="{% url 'add_vessel_from_search' %}" style="margin:0;">
+                {% csrf_token %}
+                <input type="hidden" name="mmsi" value="{{ v.mmsi }}">
+                <input type="hidden" name="name" value="{{ v.name }}">
+                <input type="hidden" name="imo" value="{{ v.imo }}">
+                <input type="hidden" name="lat" value="{{ v.lat }}">
+                <input type="hidden" name="lng" value="{{ v.lng }}">
+                <input type="hidden" name="ts" value="{{ v.ts }}">
+                <button type="submit">Add Vessel</button>
+              </form>
+            </td>
+          </tr>
+        {% endfor %}
+      {% else %}
+        <tr><td colspan="10">No results yet.</td></tr>
+      {% endif %}
+    </tbody>
+  </table>
+</div>
 
 <br>
 <a href="{% url 'myvessels' %}">Go to My Vessels</a>
 
-<!-- Leaflet (map) -->
 <link
   rel="stylesheet"
   href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
@@ -82,9 +117,15 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
 <script>
-  // If you want the map to center on posted values when available:
-  const initialLat = parseFloat(document.getElementById("latInput").value || "40.7");
-  const initialLon = parseFloat(document.getElementById("lonInput").value || "-74.0");
+
+  const latEl = document.getElementById("latInput");
+  const lonEl = document.getElementById("lonInput");
+
+  const fallbackLat = 40.7128;
+  const fallbackLon = -74.0060;
+
+  const initialLat = parseFloat(latEl.value || fallbackLat);
+  const initialLon = parseFloat(lonEl.value || fallbackLon);
 
   const map = L.map("map").setView([initialLat, initialLon], 8);
 
@@ -92,22 +133,40 @@
     attribution: "&copy; OpenStreetMap contributors",
   }).addTo(map);
 
-  let marker = null;
-
-  // If lat/lon already filled, show marker initially
+  let centerMarker = null;
+  function setCenterMarker(lat, lon) {
+    if (centerMarker) centerMarker.remove();
+    centerMarker = L.marker([lat, lon]).addTo(map);
+  }
   if (!Number.isNaN(initialLat) && !Number.isNaN(initialLon)) {
-    marker = L.marker([initialLat, initialLon]).addTo(map);
+    setCenterMarker(initialLat, initialLon);
   }
 
   map.on("click", (e) => {
     const lat = e.latlng.lat.toFixed(6);
     const lon = e.latlng.lng.toFixed(6);
 
-    document.getElementById("latInput").value = lat;
-    document.getElementById("lonInput").value = lon;
+    latEl.value = lat;
+    lonEl.value = lon;
 
-    if (marker) marker.remove();
-    marker = L.marker([lat, lon]).addTo(map);
+    setCenterMarker(lat, lon);
   });
+
+  
+  {% if results %}
+    const vesselLayer = L.layerGroup().addTo(map);
+    {% for v in results %}
+      {% if v.lat and v.lng %}
+        L.circleMarker([{{ v.lat }}, {{ v.lng }}], { radius: 5 })
+          .bindPopup(
+            "<b>{{ v.name|default:'—'|escapejs }}</b><br>" +
+            "MMSI: {{ v.mmsi|default:'—'|escapejs }}<br>" +
+            "SOG: {{ v.sog|default:'—'|escapejs }} | COG: {{ v.cog|default:'—'|escapejs }}<br>" +
+            "TS: {{ v.ts|default:'—'|escapejs }}"
+          )
+          .addTo(vesselLayer);
+      {% endif %}
+    {% endfor %}
+  {% endif %}
 </script>
 {% endblock %}

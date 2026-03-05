@@ -31,6 +31,7 @@ ALLOWED_HOSTS = [h.strip() for h in os.getenv("ALLOWED_HOSTS", "").split(",") if
 
 MARINESIA_API_KEY = os.getenv("MARINESIA_API_KEY")
 MST_API_KEY=os.getenv("MST_API_KEY")
+AISSTREAM_API_KEY=os.getenv("AISSTREAM_API_KEY")
 
 
 # Application definition
