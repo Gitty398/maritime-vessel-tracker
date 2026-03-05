@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <h1>
+    {% if mode == "add" %}Add Vessel{% else %}Update Vessel{% endif %}
+  </h1>
+
+  <form method="post">
+    {% csrf_token %}
+    {{ form.as_p }}
+
+    <button type="submit">
+      {% if mode == "add" %}Add{% else %}Save{% endif %}
+    </button>
+
+    <a href="{% url 'myvessels' %}">Cancel</a>
+  </form>
+{% endblock %}

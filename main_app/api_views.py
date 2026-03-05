@@ -1,16 +1,16 @@
 import math
-from django.db import IntegrityError, transaction
-from django.shortcuts import get_object_or_404
+from django.conf import settings
 from django.utils.dateparse import parse_datetime
-
+from django.shortcuts import get_object_or_404, redirect
+from django.contrib import messages
+from django.contrib.auth.decorators import login_required
+from django.views.decorators.http import require_POST
 from rest_framework import status, permissions
-from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework import generics
 
 from .models import SavedVessel, VesselLocation
-from .services.marinesia import vessels_in_bbox
+from .services.marinesia import vessels_in_bbox, latest_location_by_mmsi, MarinesiaError
 
 
 def nm_bbox(lat, lon, radius_nm):
@@ -19,7 +19,15 @@ def nm_bbox(lat, lon, radius_nm):
     return lat - dlat, lat + dlat, lon - dlon, lon + dlon
 
 
-class TargetSearchAPIView(APIView):
+def parse_marinesia_ts(value):
+    
+    if not isinstance(value, str):
+        return None
+    
+    return parse_datetime(value.replace("Z", "+00:00"))
+
+
+class NearbySearchAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
@@ -28,132 +36,129 @@ class TargetSearchAPIView(APIView):
         radius_nm = float(request.data.get("radius_nm", 10))
 
         lat_min, lat_max, lon_min, lon_max = nm_bbox(lat, lon, radius_nm)
-        data = vessels_in_bbox(lat_min, lat_max, lon_min, lon_max)
-        return Response(data)
-
-
-@api_view(["POST"])
-@permission_classes([permissions.IsAuthenticated])
-@transaction.atomic
-
-def save_vessels(request):
-    vessels = request.data.get("vessels", [])
-    if not isinstance(vessels, list) or not vessels:
-        return Response(
-            {"error": True, "message": "Send {vessels: [...]}"},
-            status=status.HTTP_400_BAD_REQUEST,
-        )
-
-    out = []
-
-    for v in vessels:
-        mmsi = v.get("mmsi")
-        if not mmsi:
-            continue
-
-        saved, _ = SavedVessel.objects.get_or_create(
-            user=request.user,
-            mmsi=mmsi,
-            defaults={
-                "name": (v.get("name") or ""),
-                "imo": str(v.get("imo") or ""),
-                "raw": v,
-            },
-        )
-
-        saved.raw = v
-        if v.get("name"):
-            saved.name = v["name"]
-        if v.get("imo") is not None:
-            saved.imo = str(v["imo"])
-        saved.save()
-
-        if v.get("lat") is not None and v.get("lng") is not None and v.get("ts") is not None:
-            try:
-                VesselLocation.objects.create(
-                    vessel=saved,
-                    lat=v["lat"],
-                    lng=v["lng"],
-                    sog=v.get("sog"),
-                    cog=v.get("cog"),
-                    ts=v["ts"],
-                    raw=v,
-                )
-            except IntegrityError:
-                pass
-
-        out.append({"id": saved.id, "mmsi": saved.mmsi, "name": saved.name})
-
-    return Response({"error": False, "data": out}, status=status.HTTP_201_CREATED)
-
-class SavedVesselListCreateAPIView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
-
-    def get(self, request):
-        qs = SavedVessel.objects.filter(user=request.user).order_by("-id")
-        return Response([{"id": v.id, "mmsi": v.mmsi, "name": v.name, "imo": v.imo} for v in qs])
-
-    def post(self, request):
-        v = SavedVessel.objects.create(
-            user=request.user,
-            mmsi=request.data["mmsi"],
-            name=request.data.get("name", ""),
-            imo=str(request.data.get("imo", "") or ""),
-            raw=request.data.get("raw", {}),
-        )
-        return Response({"id": v.id}, status=status.HTTP_201_CREATED)
-
-
-class SavedVesselDetailAPIView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
-
-    def get_object(self, request, pk):
-        return get_object_or_404(SavedVessel, pk=pk, user=request.user)
-
-    def get(self, request, pk):
-        v = self.get_object(request, pk)
-        return Response({"id": v.id, "mmsi": v.mmsi, "name": v.name, "imo": v.imo, "raw": v.raw})
-
-    def put(self, request, pk):
-        v = self.get_object(request, pk)
-        v.name = request.data.get("name", v.name)
-        v.imo = str(request.data.get("imo", v.imo) or "")
-        v.save()
-        return Response({"ok": True})
-
-    def delete(self, request, pk):
-        v = self.get_object(request, pk)
-        v.delete()
-        return Response(status=status.HTTP_204_NO_CONTENT)
-
-
-class VesselLocationCreateAPIView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
-
-    def post(self, request, vessel_id):
-        vessel = get_object_or_404(SavedVessel, pk=vessel_id, user=request.user)
 
         try:
-            loc = VesselLocation.objects.create(
-                vessel=vessel,
-                lat=request.data["lat"],
-                lng=request.data["lng"],
-                sog=request.data.get("sog"),
-                cog=request.data.get("cog"),
-                ts=request.data["ts"],
-                raw=request.data,
+            payload = marinesia_client().vessels_in_bbox(lat_min, lat_max, lon_min, lon_max)
+        except MarinesiaError as e:
+            return Response(
+                {"error": True, "message": str(e), "data": []},
+                status=status.HTTP_502_BAD_GATEWAY,
             )
-        except IntegrityError:
-            return Response({"error": True, "message": "Location at this ts already exists."},
-                            status=status.HTTP_409_CONFLICT)
 
-        return Response({"id": loc.id}, status=status.HTTP_201_CREATED)
+        vessels = payload.get("data", []) or []
+
+        return Response(
+            {
+                "error": False,
+                "message": f"Found {len(vessels)} vessel(s).",
+                "data": [
+                    {
+                        "name": v.get("name"),
+                        "mmsi": v.get("mmsi"),
+                        "imo": v.get("imo"),
+                        "lat": v.get("lat"),
+                        "lng": v.get("lng"),
+                        "sog": v.get("sog"),
+                        "cog": v.get("cog"),
+                        "status": v.get("status"),
+                        "ts": v.get("ts"),
+                        "raw": v,
+                    }
+                    for v in vessels
+                ],
+            },
+            status=status.HTTP_200_OK,
+        )
 
 
-class VesselLocationListAPIView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
+@login_required
+@require_POST
+def update_location_by_mmsi(request, mmsi):
+    vessel = get_object_or_404(SavedVessel, user=request.user, mmsi=mmsi)
 
-    def get(self, request, vessel_id):
-        vessel = get_object_or_404(SavedVessel, pk=vessel_id, user=request.user)
-        locations = vessel.locations.all()
-        return Response([{"id": l.id, "lat": l.lat, "lng": l.lng, "ts": l.ts} for l in locations])
+    try:
+        payload = latest_location_by_mmsi(int(mmsi))
+    except MarinesiaError as e:
+        messages.error(request, str(e))
+        return redirect("myvessels")
+    except Exception as e:
+        messages.error(request, f"Unexpected error calling Marinesia: {e}")
+        return redirect("myvessels")
+
+    data = payload.get("data") or {}
+
+    ts = parse_marinesia_ts(data.get("ts"))
+    if not ts:
+        messages.error(request, "Marinesia did not return a valid timestamp (ts).")
+        return redirect("myvessels")
+
+    lat = data.get("lat")
+    lng = data.get("lng")
+    if lat is None or lng is None:
+        messages.error(request, "Marinesia did not return lat/lng.")
+        return redirect("myvessels")
+
+    VesselLocation.objects.get_or_create(
+        vessel=vessel,
+        ts=ts,
+        defaults={
+            "lat": float(lat),
+            "lng": float(lng),
+            
+            "sog": data.get("sog"),
+            "cog": data.get("cog"),
+            "raw": data,
+        },
+    )
+
+    
+    vessel.raw = data
+    vessel.save(update_fields=["raw"])
+
+    messages.success(request, f"Updated location for MMSI {mmsi}.")
+    return redirect("myvessels")
+
+
+@login_required
+@require_POST
+def update_all_locations(request):
+    ok = 0
+    failed = 0
+
+    for v in SavedVessel.objects.filter(user=request.user):
+        try:
+            payload = latest_location_by_mmsi(int(v.mmsi))
+            data = payload.get("data") or {}
+
+            ts = parse_marinesia_ts(data.get("ts"))
+            lat = data.get("lat")
+            lng = data.get("lng")
+            if not ts or lat is None or lng is None:
+                failed += 1
+                continue
+
+            VesselLocation.objects.get_or_create(
+                vessel=v,
+                ts=ts,
+                defaults={
+                    "lat": float(lat),
+                    "lng": float(lng),
+                    "sog": data.get("sog"),
+                    "cog": data.get("cog"),
+                    "raw": data,
+                },
+            )
+
+            v.raw = data
+            v.save(update_fields=["raw"])
+            ok += 1
+        except Exception:
+            failed += 1
+            continue
+
+    if failed:
+        messages.warning(request, f"Updated {ok} vessel(s); {failed} failed.")
+    else:
+        messages.success(request, f"Updated {ok} vessel(s).")
+
+    return redirect("myvessels")
