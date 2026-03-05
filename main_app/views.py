@@ -34,3 +34,9 @@ def my_vessels_delete(request, pk):
     v = get_object_or_404(SavedVessel, pk=pk, user=request.user)
     v.delete()
     return redirect("myvessels")
+
+
+@login_required
+def my_vessels_detail(request, pk):
+    vessel = get_object_or_404(SavedVessel, pk=pk, user=request.user)
+    return render(request, "my_vessels_detail.html", {"vessel": vessel})

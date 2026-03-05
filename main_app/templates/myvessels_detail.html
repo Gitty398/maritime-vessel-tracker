@@ -2,7 +2,7 @@
 {% load static %}
 
 {% block head %}
-{% comment %} <link rel="stylesheet" href="{% static 'css/markers/marker-detail.css' %}" /> {% endcomment %}
+<link rel="stylesheet" href="{% static 'css/vessels/vessel-detail.css' %}" />
 {% endblock %}
 
 {% block content %}
@@ -12,8 +12,8 @@
   </div>
   <div class="vessel-details">
     <h1>{{ vessel.name }}</h1>
-      <h2>A {{ marker.mmsi }}</h2>
-    <p>{{ vessel.draught}}</p>
+      <h2> {{ vessel.mmsi }}</h2>
+    <p>{{ vessel.imo}}</p>
   </div>
 </section>
 {% endblock %}
