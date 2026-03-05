@@ -10,7 +10,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .models import SavedVessel, VesselLocation
-from .services.marinesia import MarinesiaClient, MarinesiaError
+from .services.marinesia import vessels_in_bbox, latest_location_by_mmsi, MarinesiaError
 
 
 def nm_bbox(lat, lon, radius_nm):
@@ -25,10 +25,6 @@ def parse_marinesia_ts(value):
         return None
     
     return parse_datetime(value.replace("Z", "+00:00"))
-
-
-def marinesia_client() -> MarinesiaClient:
-    return MarinesiaClient(api_key=settings.MARINESIA_API_KEY)
 
 
 class NearbySearchAPIView(APIView):
@@ -81,7 +77,7 @@ def update_location_by_mmsi(request, mmsi):
     vessel = get_object_or_404(SavedVessel, user=request.user, mmsi=mmsi)
 
     try:
-        payload = marinesia_client().latest_location_by_mmsi(int(mmsi))
+        payload = latest_location_by_mmsi(int(mmsi))
     except MarinesiaError as e:
         messages.error(request, str(e))
         return redirect("myvessels")
@@ -126,13 +122,12 @@ def update_location_by_mmsi(request, mmsi):
 @login_required
 @require_POST
 def update_all_locations(request):
-    client = marinesia_client()
     ok = 0
     failed = 0
 
     for v in SavedVessel.objects.filter(user=request.user):
         try:
-            payload = client.latest_location_by_mmsi(int(v.mmsi))
+            payload = latest_location_by_mmsi(int(v.mmsi))
             data = payload.get("data") or {}
 
             ts = parse_marinesia_ts(data.get("ts"))

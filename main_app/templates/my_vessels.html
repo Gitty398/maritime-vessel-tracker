@@ -3,10 +3,17 @@
 {% block content %}
 <h1>My Vessels</h1>
 
-<form method="post" action="{% url 'api_update_all_locations' %}">
+<p>
+  <a href="{% url 'myvessels_add' %}">
+    <button type="button">Add vessel</button>
+  </a>
+</p>
+
+
+{% comment %} <form method="post" action="{% url 'api_update_all_locations' %}">
   {% csrf_token %}
   <button type="submit">Update ALL locations</button>
-</form>
+</form> {% endcomment %}
 
 
 {% if vessels %}
@@ -20,6 +27,7 @@
       <th>Lng</th>
       <th>Timestamp</th>
       <th>Update Location</th>
+      <th>Edit</th>
       <th>Delete</th>
     </tr>
   </thead>
@@ -46,6 +54,11 @@
             {% csrf_token %}
             <button type="submit">Update location</button>
           </form>
+        </td>
+      <td>
+        <a href="{% url 'myvessels_edit' v.id %}">
+          <button type="button">Edit</button>
+        </a>
       </td>
       <td>
         <form method="post" action="{% url 'myvessels_delete' v.id %}">

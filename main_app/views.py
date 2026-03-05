@@ -5,49 +5,8 @@ from django.views.decorators.http import require_POST
 from .models import SavedVessel
 from django.views.decorators.http import require_http_methods
 from django.contrib.auth import login
-from .services.marinesia import MarinesiaClient, MarinesiaError
-from django.conf import settings
-from .models import SavedVessel, VesselLocation
-from django.utils.dateparse import parse_datetime
-
-import math
-
-
-def nm_bbox(lat, lon, radius_nm):
-    dlat = radius_nm / 60.0
-    dlon = radius_nm / (60.0 * max(0.01, math.cos(math.radians(lat))))
-    return lat - dlat, lat + dlat, lon - dlon, lon + dlon
-
-
-@require_http_methods(["GET", "POST"])
-@login_required
-def home(request):
-    error = None
-    results = []
-
-    if request.method == "POST":
-        try:
-            lat = float(request.POST.get("lat"))
-            lon = float(request.POST.get("lon"))
-            radius_nm = float(request.POST.get("radius_nm") or 10)
-
-            lat_min, lat_max, lon_min, lon_max = nm_bbox(lat, lon, radius_nm)
-
-            client = MarinesiaClient(api_key=settings.MARINESIA_API_KEY)
-            payload = client.vessels_in_bbox(lat_min, lat_max, lon_min, lon_max)
-
-            
-            results = payload.get("data") or []
-
-        except (TypeError, ValueError):
-            error = "Please enter valid numeric lat/lon (and radius)."
-        except MarinesiaError as e:
-            error = str(e)
-        except Exception as e:
-            error = f"Unexpected error: {e}"
-
-    return render(request, "home.html", {"results": results, "error": error})
-
+from .forms import SavedVesselForm
+from django.db import IntegrityError
 
 def signup(request):
     if request.method == "POST":
@@ -73,53 +32,81 @@ def my_vessels(request):
 @require_POST
 
 def my_vessels_delete(request, pk):
-    vessel = get_object_or_404(SavedVessel, pk=pk, user=request.user)
-    vessel.delete()
+    v = get_object_or_404(SavedVessel, pk=pk, user=request.user)
+    v.delete()
     return redirect("myvessels")
 
 
 @login_required
-
 def my_vessels_detail(request, pk):
     vessel = get_object_or_404(SavedVessel, pk=pk, user=request.user)
     return render(request, "my_vessels_detail.html", {"vessel": vessel})
 
+@login_required
+def myvessels_create(request):
+    if request.method == "POST":
+        form = SavedVesselForm(request.POST)
+        if form.is_valid():
+            vessel = form.save(commit=False)
+            vessel.user = request.user
+            try:
+                vessel.save()
+                return redirect("myvessels")
+            except IntegrityError:
+                form.add_error("mmsi", "You already saved a vessel with this MMSI.")
+    else:
+        form = SavedVesselForm()
+
+    return render(request, "myvessels_form.html", {"form": form, "mode": "add"})
 
 
 @login_required
-@require_POST
-def add_vessel_from_search(request):
-    mmsi = request.POST.get("mmsi")
-    if not mmsi:
-        return redirect("home")
+def myvessels_update(request, pk):
+    vessel = get_object_or_404(SavedVessel, pk=pk, user=request.user)
 
-    try:
-        mmsi_int = int(mmsi)
-    except ValueError:
-        return redirect("home")
+    if request.method == "POST":
+        form = SavedVesselForm(request.POST, instance=vessel)
+        if form.is_valid():
+            form.save()
+            return redirect("myvessels")
+    else:
+        form = SavedVesselForm(instance=vessel)
 
-    name = request.POST.get("name") or ""
-    imo = request.POST.get("imo") or ""
-    lat = request.POST.get("lat")
-    lng = request.POST.get("lng")
-    received = request.POST.get("received")
-
-    vessel, _ = SavedVessel.objects.get_or_create(
-        user=request.user,
-        mmsi=mmsi_int,
-        defaults={"name": name, "imo": str(imo)},
+    return render(
+        request,
+        "myvessels_form.html",
+        {"form": form, "mode": "edit", "vessel": vessel},
     )
 
-    vessel.name = name or vessel.name
-    vessel.imo = str(imo or vessel.imo or "")
-    vessel.save(update_fields=["name", "imo"])
 
-    ts = parse_datetime(received) if received else None
-    if lat and lng and ts:
-        VesselLocation.objects.get_or_create(
-            vessel=vessel,
-            ts=ts,
-            defaults={"lat": float(lat), "lng": float(lng)},
-        )
+@login_required
+def my_vessels_add(request):
+    if request.method == "POST":
+        form = SavedVesselForm(request.POST)
+        if form.is_valid():
+            vessel = form.save(commit=False)
+            vessel.user = request.user
+            try:
+                vessel.save()
+                return redirect("myvessels")
+            except IntegrityError:
+                form.add_error("mmsi", "You already saved a vessel with this MMSI.")
+    else:
+        form = SavedVesselForm()
 
-    return redirect("myvessels")
+    return render(request, "myvessels_form.html", {"form": form, "mode": "add"})
+
+
+@login_required
+def my_vessels_edit(request, pk):
+    vessel = get_object_or_404(SavedVessel, pk=pk, user=request.user)
+
+    if request.method == "POST":
+        form = SavedVesselForm(request.POST, instance=vessel)
+        if form.is_valid():
+            form.save()
+            return redirect("myvessels")
+    else:
+        form = SavedVesselForm(instance=vessel)
+
+    return render(request, "myvessels_form.html", {"form": form, "mode": "edit", "vessel": vessel})

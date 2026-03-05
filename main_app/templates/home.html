@@ -2,154 +2,73 @@
 {% block content %}
 <h1>Maritime Vessel Tracker</h1>
 
-<h2>Search nearby vessels</h2>
-
-<form method="post" style="display:flex; flex-wrap:wrap; gap:12px; align-items:flex-end; max-width:1000px;">
-  {% csrf_token %}
-
-  <label style="display:flex; flex-direction:column; gap:4px;">
-    <span>Lat</span>
-    <input
-      id="latInput"
-      name="lat"
-      type="number"
-      step="any"
-      required
-      value="{{ request.POST.lat|default:'' }}"
-    >
-  </label>
-
-  <label style="display:flex; flex-direction:column; gap:4px;">
-    <span>Lon</span>
-    <input
-      id="lonInput"
-      name="lon"
-      type="number"
-      step="any"
-      required
-      value="{{ request.POST.lon|default:'' }}"
-    >
-  </label>
-
-  <label style="display:flex; flex-direction:column; gap:4px;">
-    <span>Radius (nm)</span>
-    <input
-      name="radius_nm"
-      type="number"
-      step="any"
-      min="0"
-      value="{{ request.POST.radius_nm|default:'10' }}"
-    >
-  </label>
-
-  <button type="submit" style="padding:8px 14px;">Search</button>
-</form>
-
-{% if error %}
-  <p style="color:#b00020; margin-top:10px;">{{ error }}</p>
-{% endif %}
-
-
-<div id="map" style="height: 420px; width: 100%; max-width: 1000px; margin: 16px 0; border-radius:10px; overflow:hidden; border:1px solid #ddd;"></div>
-<p style="max-width:1000px; color:#555; margin-top:-6px;">
-  Tip: Click the map to set Lat/Lon.
-</p>
-
-<h2>Results</h2>
-
-<div style="overflow:auto; width:100%; max-width:1000px;">
-  <table border="1" cellpadding="6" cellspacing="0" style="width:100%; border-collapse:collapse;">
-    <thead style="background:#f6f6f6;">
-      <tr>
-        <th align="left">Name</th>
-        <th align="left">MMSI</th>
-        <th align="left">IMO</th>
-        <th align="left">Lat</th>
-        <th align="left">Lng</th>
-        <th align="left">SOG</th>
-        <th align="left">COG</th>
-        <th align="left">Status</th>
-        <th align="left">TS</th>
-        <th align="left">Add</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% if results %}
-        {% for v in results %}
-          <tr>
-            <td>{{ v.name|default:"—" }}</td>
-            <td style="white-space:nowrap;">{{ v.mmsi|default:"—" }}</td>
-            <td style="white-space:nowrap;">{{ v.imo|default:"—" }}</td>
-            <td>{{ v.lat|default:"—" }}</td>
-            <td>{{ v.lng|default:"—" }}</td>
-            <td>{{ v.sog|default:"—" }}</td>
-            <td>{{ v.cog|default:"—" }}</td>
-            <td>{{ v.status|default:"—" }}</td>
-            <td style="white-space:nowrap;">{{ v.ts|default:"—" }}</td>
-            <td>
-              <form method="post" action="{% url 'add_vessel_from_search' %}" style="margin:0;">
-                {% csrf_token %}
-                <input type="hidden" name="mmsi" value="{{ v.mmsi }}">
-                <input type="hidden" name="name" value="{{ v.name }}">
-                <input type="hidden" name="imo" value="{{ v.imo }}">
-                <input type="hidden" name="lat" value="{{ v.lat }}">
-                <input type="hidden" name="lng" value="{{ v.lng }}">
-                <input type="hidden" name="ts" value="{{ v.ts }}">
-                <button type="submit">Add Vessel</button>
-              </form>
-            </td>
-          </tr>
-        {% endfor %}
-      {% else %}
-        <tr><td colspan="10">No results yet.</td></tr>
-      {% endif %}
-    </tbody>
-  </table>
-</div>
-
-<br>
-<a href="{% url 'myvessels' %}">Go to My Vessels</a>
+<h2>Pick a point on the map (fills Lat/Lon)</h2>
 
 <link
   rel="stylesheet"
   href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
 />
+
+<div
+  id="map"
+  style="height: 420px; width: 100%; max-width: 1000px; border: 1px solid #ddd; border-radius: 8px; margin-bottom: 16px;"
+></div>
+
+<h2>Search by defining your bounding box</h2>
+<form id="searchForm">
+  {% csrf_token %}
+
+  <label>
+    Lat:
+    <input id="latInput" name="lat" type="number" step="any" required>
+  </label>
+
+  <label>
+    Lon:
+    <input id="lonInput" name="lon" type="number" step="any" required>
+  </label>
+
+  <label>
+    Radius (nm):
+    <input name="radius_nm" type="number" step="any" value="10">
+  </label>
+
+  <button type="submit">Search</button>
+</form>
+
+<p style="margin-top:8px; color:#555;">
+  Tip: click the map to autofill Lat/Lon.
+</p>
+
+
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
 <script>
+  const startLat = 40.70;
+  const startLon = -74.00;
+  const startZoom = 9;
 
-  const latEl = document.getElementById("latInput");
-  const lonEl = document.getElementById("lonInput");
-
-  const fallbackLat = 40.7128;
-  const fallbackLon = -74.0060;
-
-  const initialLat = parseFloat(latEl.value || fallbackLat);
-  const initialLon = parseFloat(lonEl.value || fallbackLon);
-
-  const map = L.map("map").setView([initialLat, initialLon], 8);
+  const map = L.map("map").setView([startLat, startLon], startZoom);
 
   L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    attribution: "&copy; OpenStreetMap contributors",
+    maxZoom: 19,
+    attribution: '&copy; OpenStreetMap contributors'
   }).addTo(map);
 
-  let centerMarker = null;
-  function setCenterMarker(lat, lon) {
-    if (centerMarker) centerMarker.remove();
-    centerMarker = L.marker([lat, lon]).addTo(map);
-  }
-  if (!Number.isNaN(initialLat) && !Number.isNaN(initialLon)) {
-    setCenterMarker(initialLat, initialLon);
+  let marker = null;
+
+  function setLatLon(lat, lon) {
+    document.getElementById("latInput").value = Number(lat).toFixed(6);
+    document.getElementById("lonInput").value = Number(lon).toFixed(6);
   }
 
   map.on("click", (e) => {
-    const lat = e.latlng.lat.toFixed(6);
-    const lon = e.latlng.lng.toFixed(6);
+    const { lat, lng } = e.latlng;
 
-    latEl.value = lat;
-    lonEl.value = lon;
+    if (marker) marker.remove();
+    marker = L.marker([lat, lng]).addTo(map);
 
-    setCenterMarker(lat, lon);
+    setLatLon(lat, lng);
   });
 
   
@@ -169,4 +88,5 @@
     {% endfor %}
   {% endif %}
 </script>
+
 {% endblock %}

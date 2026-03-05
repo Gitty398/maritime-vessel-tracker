@@ -2,56 +2,41 @@
 from dataclasses import dataclass
 from typing import Any, Dict, Optional
 import requests
-from requests.adapters import HTTPAdapter
-from urllib3.util.retry import Retry
+from django.conf import settings
+
+BASE_URL = "https://api.marinesia.com/api/v1"
 
 
 class MarinesiaError(Exception):
-    pass
+    """Raised when a Marinesia API request fails."""
 
 
-@dataclass(frozen=True)
-class MarinesiaClient:
-    api_key: str
-    base_url: str = "https://api.marinesia.com"
-    connect_timeout: float = 5.0
-    read_timeout: float = 30.0
+def _get(path: str, params: dict, *, timeout: int = 12):
+    api_key = settings.MARINESIA_API_KEY
+    if not api_key:
+        raise MarinesiaError("MARINESIA_API_KEY is not set.")
 
-    def _session(self) -> requests.Session:
-        s = requests.Session()
-        retries = Retry(
-            total=4,
-            backoff_factor=0.6,
-            status_forcelist=[429, 500, 502, 503, 504],
-            allowed_methods=["GET"],
-            raise_on_status=False,
-        )
-        s.mount("https://", HTTPAdapter(max_retries=retries))
-        return s
+    params = {"key": api_key, **params}
 
-    def _get(self, path: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-        params = dict(params or {})
-        params["key"] = self.api_key
+    try:
+        r = requests.get(f"{BASE_URL}{path}", params=params, timeout=timeout)
+        r.raise_for_status()
+        return r.json()
+    except requests.RequestException as e:
+        raise MarinesiaError(str(e)) from e
 
-        url = f"{self.base_url}{path}"
-        try:
-            r = self._session().get(url, params=params, timeout=(self.connect_timeout, self.read_timeout))
-        except requests.Timeout as e:
-            raise MarinesiaError(f"Marinesia timed out (connect={self.connect_timeout}s, read={self.read_timeout}s).") from e
-        except requests.RequestException as e:
-            raise MarinesiaError(f"Network error calling Marinesia: {e}") from e
 
-        if r.status_code == 429:
-            raise MarinesiaError("Marinesia rate limit exceeded (429).")
-        if r.status_code >= 400:
-            raise MarinesiaError(f"Marinesia HTTP {r.status_code}: {r.text[:200]}")
+def vessels_in_bbox(lat_min, lat_max, lon_min, lon_max):
+    return _get(
+        "/vessel/nearby",
+        {
+            "lat_min": lat_min,
+            "lat_max": lat_max,
+            "long_min": lon_min,
+            "long_max": lon_max,
+        },
+    )
 
-        try:
-            payload = r.json()
-        except ValueError as e:
-            raise MarinesiaError("Marinesia returned non-JSON response.") from e
 
-        if payload.get("error") is True:
-            raise MarinesiaError(payload.get("message") or "Marinesia error")
-
-        return payload
+def latest_location_by_mmsi(mmsi: int):
+    return _get("/vessel/latest", {"mmsi": mmsi})
