@@ -1,3 +1,6 @@
+# services/marinesia.py
+from dataclasses import dataclass
+from typing import Any, Dict, Optional
 import requests
 from django.conf import settings
 

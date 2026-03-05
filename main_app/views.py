@@ -3,6 +3,7 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.forms import UserCreationForm
 from django.views.decorators.http import require_POST
 from .models import SavedVessel
+from django.views.decorators.http import require_http_methods
 from django.contrib.auth import login
 from .forms import SavedVesselForm
 from django.db import IntegrityError
@@ -20,9 +21,6 @@ def signup(request):
     return render(request, "registration/signup.html", {"form": form})
 
 
-def home(request):
-    return render(request, 'home.html')
-
 
 @login_required
 def my_vessels(request):
@@ -32,6 +30,7 @@ def my_vessels(request):
 
 @login_required
 @require_POST
+
 def my_vessels_delete(request, pk):
     v = get_object_or_404(SavedVessel, pk=pk, user=request.user)
     v.delete()

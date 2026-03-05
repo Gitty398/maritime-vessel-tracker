@@ -1,5 +1,4 @@
 {% extends "base.html" %}
-
 {% block content %}
 <h1>Maritime Vessel Tracker</h1>
 
@@ -71,6 +70,23 @@
 
     setLatLon(lat, lng);
   });
+
+  
+  {% if results %}
+    const vesselLayer = L.layerGroup().addTo(map);
+    {% for v in results %}
+      {% if v.lat and v.lng %}
+        L.circleMarker([{{ v.lat }}, {{ v.lng }}], { radius: 5 })
+          .bindPopup(
+            "<b>{{ v.name|default:'—'|escapejs }}</b><br>" +
+            "MMSI: {{ v.mmsi|default:'—'|escapejs }}<br>" +
+            "SOG: {{ v.sog|default:'—'|escapejs }} | COG: {{ v.cog|default:'—'|escapejs }}<br>" +
+            "TS: {{ v.ts|default:'—'|escapejs }}"
+          )
+          .addTo(vesselLayer);
+      {% endif %}
+    {% endfor %}
+  {% endif %}
 </script>
 
 {% endblock %}
