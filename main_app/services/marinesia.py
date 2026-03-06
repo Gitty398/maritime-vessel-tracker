@@ -53,16 +53,31 @@ class MarinesiaError(Exception):
     message: str
     status_code: int = 502
 
+    def __str__(self):
+        return self.message
 
-def _get(path: str, params: dict, timeout: int = 12) -> dict:
+
+def _get(path: str, params: dict, timeout=(5, 30)) -> dict:
     if not settings.MARINESIA_API_KEY:
-        raise MarinesiaError("MARINESIA_API_KEY is not set", 500)
+        raise MarinesiaError("MARINESIA_API_KEY is not set.", 500)
 
     p = dict(params)
     p["key"] = settings.MARINESIA_API_KEY
 
     url = f"{BASE_URL}{path}"
-    resp = requests.get(url, params=p, timeout=timeout)
+
+    try:
+        resp = requests.get(url, params=p, timeout=timeout)
+    except requests.Timeout as e:
+        raise MarinesiaError(
+            "Marinesia API timed out. Try a smaller radius or try again.",
+            504,
+        ) from e
+    except requests.RequestException as e:
+        raise MarinesiaError(
+            f"Could not reach Marinesia API: {e}",
+            502,
+        ) from e
 
     if resp.status_code >= 400:
         try:
@@ -72,7 +87,10 @@ def _get(path: str, params: dict, timeout: int = 12) -> dict:
             msg = resp.text
         raise MarinesiaError(msg, resp.status_code)
 
-    return resp.json()
+    try:
+        return resp.json()
+    except ValueError as e:
+        raise MarinesiaError("Marinesia returned invalid JSON.", 502) from e
 
 
 def vessels_nearby_bbox(lat_min: float, lat_max: float, lon_min: float, lon_max: float) -> dict:
@@ -85,3 +103,7 @@ def vessels_nearby_bbox(lat_min: float, lat_max: float, lon_min: float, lon_max:
             "long_max": lon_max,
         },
     )
+
+
+def latest_location_by_mmsi(mmsi: int) -> dict:
+    return _get("/vessel/latest", {"mmsi": mmsi})

@@ -60,12 +60,72 @@
   Tip: click the map to autofill Lat/Lon.
 </p>
 
+{% if error_message %}
+  <p style="color: red;">{{ error_message }}</p>
+{% endif %}
+
+{% if results %}
+  <h2>Search Results</h2>
+
+  {% if user.is_authenticated %}
+    <form method="post" action="{% url 'add_vessels_from_search' %}" id="bulkAddForm">
+      {% csrf_token %}
+
+      <p>
+        <button type="button" id="selectAllBtn">Select All</button>
+        <button type="button" id="clearAllBtn">Clear All</button>
+        <button type="submit">Add Selected to My Vessels</button>
+      </p>
+
+      <table border="1" cellpadding="6" cellspacing="0" style="width:100%; max-width:1000px;">
+        <thead>
+          <tr>
+            <th>Select</th>
+            <th>Name</th>
+            <th>MMSI</th>
+            <th>IMO</th>
+            <th>Lat</th>
+            <th>Lng</th>
+            <th>SOG</th>
+            <th>COG</th>
+            <th>Timestamp</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for v in results %}
+            <tr>
+              <td>
+                <input type="checkbox" class="vessel-checkbox">
+              </td>
+              <td>{{ v.name|default:"—" }}</td>
+              <td>{{ v.mmsi|default:"—" }}</td>
+              <td>{{ v.imo|default:"—" }}</td>
+              <td>{{ v.lat|default:"—" }}</td>
+              <td>{{ v.lng|default:"—" }}</td>
+              <td>{{ v.sog|default:"—" }}</td>
+              <td>{{ v.cog|default:"—" }}</td>
+              <td>{{ v.ts|default:"—" }}</td>
+
+              <td style="display:none;">
+                <input type="hidden" class="mmsi" value="{{ v.mmsi }}">
+                <input type="hidden" class="name" value="{{ v.name }}">
+                <input type="hidden" class="imo" value="{{ v.imo }}">
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </form>
+  {% else %}
+    <p><a href="{% url 'login' %}">Log in</a> to add vessels.</p>
+  {% endif %}
+{% endif %}
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
 <script>
-  const startLat = 40.70;
-  const startLon = -74.00;
+  const startLat = {% if submitted_lat %}{{ submitted_lat }}{% else %}40.70{% endif %};
+  const startLon = {% if submitted_lon %}{{ submitted_lon }}{% else %}-74.00{% endif %};
   const startZoom = 9;
 
   const map = L.map("map").setView([startLat, startLon], startZoom);
@@ -91,11 +151,16 @@
     setLatLon(lat, lng);
   });
 
-  
+  {% if submitted_lat and submitted_lon %}
+    marker = L.marker([{{ submitted_lat }}, {{ submitted_lon }}]).addTo(map);
+  {% endif %}
+
   {% if results %}
     const vesselLayer = L.layerGroup().addTo(map);
+    const bounds = [];
+
     {% for v in results %}
-      {% if v.lat and v.lng %}
+      {% if v.lat != None and v.lng != None %}
         L.circleMarker([{{ v.lat }}, {{ v.lng }}], { radius: 5 })
           .bindPopup(
             "<b>{{ v.name|default:'—'|escapejs }}</b><br>" +
@@ -104,9 +169,63 @@
             "TS: {{ v.ts|default:'—'|escapejs }}"
           )
           .addTo(vesselLayer);
+
+        bounds.push([{{ v.lat }}, {{ v.lng }}]);
       {% endif %}
     {% endfor %}
+
+    if (bounds.length) {
+      map.fitBounds(bounds, { padding: [20, 20] });
+    }
   {% endif %}
+</script>
+
+<script>
+  const bulkAddForm = document.getElementById("bulkAddForm");
+
+  if (bulkAddForm) {
+    document.getElementById("selectAllBtn").addEventListener("click", () => {
+      document.querySelectorAll(".vessel-checkbox").forEach(cb => cb.checked = true);
+    });
+
+    document.getElementById("clearAllBtn").addEventListener("click", () => {
+      document.querySelectorAll(".vessel-checkbox").forEach(cb => cb.checked = false);
+    });
+
+    bulkAddForm.addEventListener("submit", (e) => {
+      document.querySelectorAll(".selected-hidden").forEach(el => el.remove());
+
+      const rows = bulkAddForm.querySelectorAll("tbody tr");
+      let selectedCount = 0;
+
+      rows.forEach((row) => {
+        const checked = row.querySelector(".vessel-checkbox");
+        if (!checked || !checked.checked) return;
+
+        selectedCount += 1;
+
+        const fields = {
+          mmsi: row.querySelector(".mmsi")?.value || "",
+          name: row.querySelector(".name")?.value || "",
+          imo: row.querySelector(".imo")?.value || "",
+        };
+
+        for (const [key, value] of Object.entries(fields)) {
+          const input = document.createElement("input");
+          input.type = "hidden";
+          input.name = key;
+          input.value = value;
+          input.className = "selected-hidden";
+          bulkAddForm.appendChild(input);
+        }
+      });
+
+      if (selectedCount === 0) {
+        e.preventDefault();
+        alert("Select at least one vessel.");
+      }
+    });
+  }
 </script>
 
 {% endblock %}

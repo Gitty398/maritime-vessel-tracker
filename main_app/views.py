@@ -1,14 +1,17 @@
-from django.contrib.auth.decorators import login_required
-from django.shortcuts import render, redirect, get_object_or_404
-from django.contrib.auth.forms import UserCreationForm
-from django.views.decorators.http import require_POST
-from .models import SavedVessel
-from django.views.decorators.http import require_http_methods
+from django.contrib import messages
 from django.contrib.auth import login
-from .forms import SavedVesselForm
+from django.contrib.auth.decorators import login_required
+from django.contrib.auth.forms import UserCreationForm
+from django.core.cache import cache
 from django.db import IntegrityError
-from .services.marinesia import vessels_nearby_bbox, MarinesiaError
+from django.shortcuts import get_object_or_404, redirect, render
+from django.views.decorators.http import require_POST
+
 from .api_views import radius_nm_to_bbox
+from .forms import SavedVesselForm
+from .models import SavedVessel
+from .services.marinesia import MarinesiaError, vessels_nearby_bbox
+
 
 def signup(request):
     if request.method == "POST":
@@ -21,6 +24,7 @@ def signup(request):
         form = UserCreationForm()
 
     return render(request, "registration/signup.html", {"form": form})
+
 
 @login_required
 def home(request):
@@ -42,9 +46,20 @@ def home(request):
                 error_message = "Radius must be between 0 and 100 nautical miles."
             else:
                 lat_min, lat_max, lon_min, lon_max = radius_nm_to_bbox(lat, lon, radius_nm)
+
+                cache_key = f"bbox:{round(lat, 4)}:{round(lon, 4)}:{radius_nm}"
+
                 try:
-                    payload = vessels_nearby_bbox(lat_min, lat_max, lon_min, lon_max)
+                    payload = cache.get(cache_key)
+
+                    if payload is None:
+                        payload = vessels_nearby_bbox(lat_min, lat_max, lon_min, lon_max)
+                        cache.set(cache_key, payload, 60)
+                    else:
+                        print("Using cached results")
+
                     results = payload.get("data", []) or []
+
                 except MarinesiaError as e:
                     error_message = str(e)
                 except Exception as e:
@@ -65,21 +80,54 @@ def home(request):
 
 @login_required
 def my_vessels(request):
-    vessels = (
-        SavedVessel.objects
-        .filter(user=request.user)
-        .order_by("-created_at")
-    )
+    vessels = SavedVessel.objects.filter(user=request.user).order_by("-created_at")
     return render(request, "my_vessels.html", {"vessels": vessels})
 
+
+@login_required
+def add_vessels_from_search(request):
+    if request.method != "POST":
+        return redirect("home")
+
+    mmsis = request.POST.getlist("mmsi")
+    names = request.POST.getlist("name")
+    imos = request.POST.getlist("imo")
+
+    added = 0
+    skipped = 0
+
+    for mmsi, name, imo in zip(mmsis, names, imos):
+        if not mmsi:
+            continue
+
+        _, created = SavedVessel.objects.get_or_create(
+            user=request.user,
+            mmsi=int(mmsi),
+            defaults={
+                "name": name or "",
+                "imo": imo or "",
+                "raw": {},
+            },
+        )
+
+        if created:
+            added += 1
+        else:
+            skipped += 1
+
+    if added:
+        messages.success(request, f"Added {added} vessel(s).")
+    if skipped:
+        messages.info(request, f"{skipped} vessel(s) were already saved.")
+
+    return redirect("myvessels")
 
 
 @login_required
 @require_POST
-
 def my_vessels_delete(request, pk):
-    v = get_object_or_404(SavedVessel, pk=pk, user=request.user)
-    v.delete()
+    vessel = get_object_or_404(SavedVessel, pk=pk, user=request.user)
+    vessel.delete()
     return redirect("myvessels")
 
 
@@ -87,42 +135,6 @@ def my_vessels_delete(request, pk):
 def my_vessels_detail(request, pk):
     vessel = get_object_or_404(SavedVessel, pk=pk, user=request.user)
     return render(request, "my_vessels_detail.html", {"vessel": vessel})
-
-@login_required
-def myvessels_create(request):
-    if request.method == "POST":
-        form = SavedVesselForm(request.POST)
-        if form.is_valid():
-            vessel = form.save(commit=False)
-            vessel.user = request.user
-            try:
-                vessel.save()
-                return redirect("myvessels")
-            except IntegrityError:
-                form.add_error("mmsi", "You already saved a vessel with this MMSI.")
-    else:
-        form = SavedVesselForm()
-
-    return render(request, "myvessels_form.html", {"form": form, "mode": "add"})
-
-
-@login_required
-def myvessels_update(request, pk):
-    vessel = get_object_or_404(SavedVessel, pk=pk, user=request.user)
-
-    if request.method == "POST":
-        form = SavedVesselForm(request.POST, instance=vessel)
-        if form.is_valid():
-            form.save()
-            return redirect("myvessels")
-    else:
-        form = SavedVesselForm(instance=vessel)
-
-    return render(
-        request,
-        "myvessels_form.html",
-        {"form": form, "mode": "edit", "vessel": vessel},
-    )
 
 
 @login_required
@@ -155,4 +167,8 @@ def my_vessels_edit(request, pk):
     else:
         form = SavedVesselForm(instance=vessel)
 
-    return render(request, "myvessels_form.html", {"form": form, "mode": "edit", "vessel": vessel})
+    return render(
+        request,
+        "myvessels_form.html",
+        {"form": form, "mode": "edit", "vessel": vessel},
+    )
