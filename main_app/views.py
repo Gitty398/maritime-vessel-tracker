@@ -87,23 +87,29 @@ def my_vessels(request):
 
 
 @login_required
-
+@require_POST
 def add_vessels_from_search(request):
-    if request.method != "POST":
-        return redirect("home")
+    selected_mmsis = set(request.POST.getlist("selected_mmsi"))
 
     mmsis = request.POST.getlist("mmsi")
     names = request.POST.getlist("name")
     imos = request.POST.getlist("imo")
+    lats = request.POST.getlist("lat")
+    lngs = request.POST.getlist("lng")
+    tss = request.POST.getlist("ts")
+    sogs = request.POST.getlist("sog")
+    cogs = request.POST.getlist("cog")
 
     added = 0
     skipped = 0
 
-    for mmsi, name, imo in zip(mmsis, names, imos):
-        if not mmsi:
+    for mmsi, name, imo, lat, lng, ts_raw, sog, cog in zip(
+        mmsis, names, imos, lats, lngs, tss, sogs, cogs
+    ):
+        if not mmsi or mmsi not in selected_mmsis:
             continue
 
-        _, created = SavedVessel.objects.get_or_create(
+        vessel, created = SavedVessel.objects.get_or_create(
             user=request.user,
             mmsi=int(mmsi),
             defaults={
@@ -117,6 +123,25 @@ def add_vessels_from_search(request):
             added += 1
         else:
             skipped += 1
+
+        ts = parse_datetime(ts_raw.replace("Z", "+00:00")) if ts_raw else None
+
+        if lat and lng and ts:
+            VesselLocation.objects.get_or_create(
+                vessel=vessel,
+                ts=ts,
+                defaults={
+                    "lat": float(lat),
+                    "lng": float(lng),
+                    "sog": float(sog) if sog not in ("", None) else None,
+                    "cog": float(cog) if cog not in ("", None) else None,
+                    "raw": {},
+                },
+            )
+
+        vessel.name = name or vessel.name
+        vessel.imo = imo or vessel.imo
+        vessel.save(update_fields=["name", "imo"])
 
     if added:
         messages.success(request, f"Added {added} vessel(s).")

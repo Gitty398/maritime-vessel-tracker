@@ -68,14 +68,10 @@
   <h2>Search Results</h2>
 
   {% if user.is_authenticated %}
-    <form method="post" action="{% url 'add_vessels_from_search' %}" id="bulkAddForm">
+    <form method="post" action="{% url 'add_vessels_from_search' %}">
       {% csrf_token %}
 
-      <p>
-        <button type="button" id="selectAllBtn">Select All</button>
-        <button type="button" id="clearAllBtn">Clear All</button>
-        <button type="submit">Add Selected to My Vessels</button>
-      </p>
+      <button type="submit">Add Selected to My Vessels</button>
 
       <table border="1" cellpadding="6" cellspacing="0" style="width:100%; max-width:1000px;">
         <thead>
@@ -95,8 +91,9 @@
           {% for v in results %}
             <tr>
               <td>
-                <input type="checkbox" class="vessel-checkbox">
+                <input type="checkbox" name="selected_mmsi" value="{{ v.mmsi }}">
               </td>
+
               <td>{{ v.name|default:"—" }}</td>
               <td>{{ v.mmsi|default:"—" }}</td>
               <td>{{ v.imo|default:"—" }}</td>
@@ -107,9 +104,14 @@
               <td>{{ v.ts|default:"—" }}</td>
 
               <td style="display:none;">
-                <input type="hidden" class="mmsi" value="{{ v.mmsi }}">
-                <input type="hidden" class="name" value="{{ v.name }}">
-                <input type="hidden" class="imo" value="{{ v.imo }}">
+                <input type="hidden" name="mmsi" value="{{ v.mmsi }}">
+                <input type="hidden" name="name" value="{{ v.name }}">
+                <input type="hidden" name="imo" value="{{ v.imo }}">
+                <input type="hidden" name="lat" value="{{ v.lat }}">
+                <input type="hidden" name="lng" value="{{ v.lng }}">
+                <input type="hidden" name="ts" value="{{ v.ts }}">
+                <input type="hidden" name="sog" value="{{ v.sog }}">
+                <input type="hidden" name="cog" value="{{ v.cog }}">
               </td>
             </tr>
           {% endfor %}
