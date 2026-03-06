@@ -1,0 +1,1 @@
+web: gunicorn maritime_vessel_tracker.wsgi

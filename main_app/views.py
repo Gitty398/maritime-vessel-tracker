@@ -27,18 +27,19 @@ def signup(request):
 
 
 @login_required
+
 def home(request):
     results = []
     error_message = None
     lat = None
     lon = None
-    radius_nm = 10
+    radius_nm = 5
 
     if request.method == "POST":
         try:
             lat = float(request.POST.get("lat"))
             lon = float(request.POST.get("lon"))
-            radius_nm = float(request.POST.get("radius_nm", 10))
+            radius_nm = float(request.POST.get("radius_nm", 5))
         except (TypeError, ValueError):
             error_message = "Please provide valid numeric values for lat, lon, and radius."
         else:
@@ -79,12 +80,14 @@ def home(request):
 
 
 @login_required
+
 def my_vessels(request):
     vessels = SavedVessel.objects.filter(user=request.user).order_by("-created_at")
     return render(request, "my_vessels.html", {"vessels": vessels})
 
 
 @login_required
+
 def add_vessels_from_search(request):
     if request.method != "POST":
         return redirect("home")
@@ -124,6 +127,7 @@ def add_vessels_from_search(request):
 
 
 @login_required
+
 @require_POST
 def my_vessels_delete(request, pk):
     vessel = get_object_or_404(SavedVessel, pk=pk, user=request.user)
@@ -132,12 +136,14 @@ def my_vessels_delete(request, pk):
 
 
 @login_required
+
 def my_vessels_detail(request, pk):
     vessel = get_object_or_404(SavedVessel, pk=pk, user=request.user)
     return render(request, "my_vessels_detail.html", {"vessel": vessel})
 
 
 @login_required
+
 def my_vessels_add(request):
     if request.method == "POST":
         form = SavedVesselForm(request.POST)
@@ -156,6 +162,7 @@ def my_vessels_add(request):
 
 
 @login_required
+
 def my_vessels_edit(request, pk):
     vessel = get_object_or_404(SavedVessel, pk=pk, user=request.user)
 
@@ -177,6 +184,7 @@ def my_vessels_edit(request, pk):
 
 @login_required
 @require_POST
+
 def update_location_by_mmsi(request, mmsi: int):
     print("update_location_by_mmsi hit", mmsi)
 
@@ -184,7 +192,6 @@ def update_location_by_mmsi(request, mmsi: int):
 
     try:
         payload = latest_location_by_mmsi(int(mmsi))
-        print("LATEST LOCATION PAYLOAD =", payload)
     except MarinesiaError as e:
         print("MarinesiaError:", e)
         messages.error(request, str(e))
@@ -203,8 +210,6 @@ def update_location_by_mmsi(request, mmsi: int):
     else:
         data = {}
 
-    print("NORMALIZED DATA =", data)
-
     raw_ts = data.get("received") or data.get("ts")
     print("RAW TS =", raw_ts)
 
@@ -217,7 +222,6 @@ def update_location_by_mmsi(request, mmsi: int):
 
     lat = data.get("lat")
     lng = data.get("lng")
-    print("LAT/LNG =", lat, lng)
 
     if lat is None or lng is None:
         messages.error(request, "API did not return lat/lng.")
@@ -240,12 +244,6 @@ def update_location_by_mmsi(request, mmsi: int):
     vessel.raw = data
     vessel.save(update_fields=["name", "imo", "raw"])
 
-    print("update_location_by_mmsi hit", mmsi)
-    print("payload =", payload)
-    print("data =", data)
-    print("ts =", ts)
-    print("lat =", lat, "lng =", lng)
-
     messages.success(request, f"Updated location for MMSI {mmsi}.")
-    print("Created/updated location for", mmsi, "ts=", ts, "lat=", lat, "lng=", lng)
+
     return redirect("myvessels")

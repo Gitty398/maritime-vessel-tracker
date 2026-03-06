@@ -23,10 +23,6 @@ main > section {
   max-width: 375px;
 }
 
-/* .cat-container {
-  width: 80%;
-} */
-
 .login {
   display: flex;
   flex-direction: column;

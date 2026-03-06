@@ -11,6 +11,9 @@ psycopg2-binary = "*"
 requests = "*"
 websockets = "*"
 asyncio = "*"
+whitenoise = "*"
+gunicorn = "*"
+dj-database-url = "*"
 
 [dev-packages]
 
