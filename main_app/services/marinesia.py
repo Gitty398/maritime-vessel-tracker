@@ -59,4 +59,4 @@ def vessels_nearby_bbox(lat_min, lat_max, lon_min, lon_max):
 
 
 def latest_location_by_mmsi(mmsi):
-    return _get("/vessel/latest", {"mmsi": mmsi})
+    return _get(f"/vessel/{mmsi}/location/latest", {}, timeout=(5, 40))
