@@ -50,7 +50,7 @@
         <td>{% if p %}{{ p.lng }}{% else %}—{% endif %}</td>
         <td>{% if p %}{{ p.ts }}{% else %}—{% endif %}</td>
         <td>
-          <form method="post" action="/api/my-vessels/{{ v.mmsi }}/update-location/">
+          <form method="post" action="{% url 'update_location_by_mmsi' v.mmsi %}">
             {% csrf_token %}
             <button type="submit">Update location</button>
           </form>

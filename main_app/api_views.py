@@ -163,19 +163,13 @@
 
 #     return redirect("myvessels")
 
-import math
-from rest_framework.views import APIView
+from rest_framework import permissions, status
 from rest_framework.response import Response
-from rest_framework import status, permissions
-from .services.marinesia import vessels_nearby_bbox, MarinesiaError
+from rest_framework.views import APIView
 
+from .services.geo import radius_nm_to_bbox
+from .services.marinesia import MarinesiaError, vessels_nearby_bbox
 
-def radius_nm_to_bbox(lat: float, lon: float, radius_nm: float):
-    
-    dlat = radius_nm / 60.0
-    cos_lat = max(0.01, math.cos(math.radians(lat)))
-    dlon = radius_nm / (60.0 * cos_lat)
-    return lat - dlat, lat + dlat, lon - dlon, lon + dlon
 
 class NearbyVesselsSearchAPIView(APIView):
     permission_classes = [permissions.AllowAny]
@@ -190,17 +184,7 @@ class NearbyVesselsSearchAPIView(APIView):
                 {
                     "error": True,
                     "message": "Provide lat, lon, and optional radius_nm as numbers.",
-                    "data": []
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        if radius_nm <= 0 or radius_nm > 100:
-            return Response(
-                {
-                    "error": True,
-                    "message": "radius_nm must be between 0 and 100.",
-                    "data": []
+                    "data": [],
                 },
                 status=status.HTTP_400_BAD_REQUEST,
             )
@@ -211,35 +195,8 @@ class NearbyVesselsSearchAPIView(APIView):
             payload = vessels_nearby_bbox(lat_min, lat_max, lon_min, lon_max)
         except MarinesiaError as e:
             return Response(
-                {
-                    "error": True,
-                    "message": str(e),
-                    "data": []
-                },
-                status=status.HTTP_502_BAD_GATEWAY,
+                {"error": True, "message": str(e), "data": []},
+                status=e.status_code,
             )
 
-        vessels = payload.get("data", []) or []
-
-        return Response(
-            {
-                "error": False,
-                "message": f"Found {len(vessels)} vessel(s).",
-                "data": [
-                    {
-                        "name": v.get("name"),
-                        "mmsi": v.get("mmsi"),
-                        "imo": v.get("imo"),
-                        "lat": v.get("lat"),
-                        "lng": v.get("lng"),
-                        "sog": v.get("sog"),
-                        "cog": v.get("cog"),
-                        "status": v.get("status"),
-                        "ts": v.get("ts"),
-                        "raw": v,
-                    }
-                    for v in vessels
-                ],
-            },
-            status=status.HTTP_200_OK,
-        )
+        return Response(payload, status=status.HTTP_200_OK)
