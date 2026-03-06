@@ -6,11 +6,11 @@ from django.core.cache import cache
 from django.db import IntegrityError
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
-
-from .api_views import radius_nm_to_bbox
+from django.utils.dateparse import parse_datetime
 from .forms import SavedVesselForm
-from .models import SavedVessel
-from .services.marinesia import MarinesiaError, vessels_nearby_bbox
+from .models import SavedVessel, VesselLocation
+from .services.geo import radius_nm_to_bbox
+from .services.marinesia import MarinesiaError, vessels_nearby_bbox, latest_location_by_mmsi
 
 
 def signup(request):
@@ -172,3 +172,80 @@ def my_vessels_edit(request, pk):
         "myvessels_form.html",
         {"form": form, "mode": "edit", "vessel": vessel},
     )
+
+
+
+@login_required
+@require_POST
+def update_location_by_mmsi(request, mmsi: int):
+    print("update_location_by_mmsi hit", mmsi)
+
+    vessel = get_object_or_404(SavedVessel, user=request.user, mmsi=mmsi)
+
+    try:
+        payload = latest_location_by_mmsi(int(mmsi))
+        print("LATEST LOCATION PAYLOAD =", payload)
+    except MarinesiaError as e:
+        print("MarinesiaError:", e)
+        messages.error(request, str(e))
+        return redirect("myvessels")
+    except Exception as e:
+        print("Unexpected exception calling latest_location_by_mmsi:", e)
+        messages.error(request, f"Unexpected error: {e}")
+        return redirect("myvessels")
+
+    raw_data = payload.get("data", payload)
+
+    if isinstance(raw_data, list):
+        data = raw_data[0] if raw_data else {}
+    elif isinstance(raw_data, dict):
+        data = raw_data
+    else:
+        data = {}
+
+    print("NORMALIZED DATA =", data)
+
+    raw_ts = data.get("received") or data.get("ts")
+    print("RAW TS =", raw_ts)
+
+    ts = parse_datetime(raw_ts.replace("Z", "+00:00")) if raw_ts else None
+    print("PARSED TS =", ts)
+
+    if ts is None:
+        messages.error(request, "API did not return a valid timestamp.")
+        return redirect("myvessels")
+
+    lat = data.get("lat")
+    lng = data.get("lng")
+    print("LAT/LNG =", lat, lng)
+
+    if lat is None or lng is None:
+        messages.error(request, "API did not return lat/lng.")
+        return redirect("myvessels")
+
+    VesselLocation.objects.get_or_create(
+        vessel=vessel,
+        ts=ts,
+        defaults={
+            "lat": float(lat),
+            "lng": float(lng),
+            "sog": data.get("speed") or data.get("sog"),
+            "cog": data.get("course") or data.get("cog"),
+            "raw": data,
+        },
+    )
+
+    vessel.name = data.get("vessel_name") or vessel.name
+    vessel.imo = str(data.get("imo") or vessel.imo or "")
+    vessel.raw = data
+    vessel.save(update_fields=["name", "imo", "raw"])
+
+    print("update_location_by_mmsi hit", mmsi)
+    print("payload =", payload)
+    print("data =", data)
+    print("ts =", ts)
+    print("lat =", lat, "lng =", lng)
+
+    messages.success(request, f"Updated location for MMSI {mmsi}.")
+    print("Created/updated location for", mmsi, "ts=", ts, "lat=", lat, "lng=", lng)
+    return redirect("myvessels")
