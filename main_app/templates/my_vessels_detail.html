@@ -1,19 +1,62 @@
-{% extends 'base.html' %} 
+{% extends "base.html" %}
 {% load static %}
-
-{% block head %}
-<link rel="stylesheet" href="{% static 'css/vessels/vessel-detail.css' %}" />
-{% endblock %}
 
 {% block content %}
 <section class="vessel-container">
-  <div class="vessel-img">
-    {% comment %} <img src="{% static 'images/sk8r-boi-cat.svg' %}" alt="A skater boy cat" /> {% endcomment %}
-  </div>
   <div class="vessel-details">
-    <h1>{{ vessel.name }}</h1>
-      <h2> {{ vessel.mmsi }}</h2>
-    <p>{{ vessel.imo}}</p>
+    <h1>{{ vessel.name|default:"Unnamed vessel" }}</h1>
+
+    <p><strong>MMSI:</strong> {{ vessel.mmsi }}</p>
+    <p><strong>IMO:</strong> {{ vessel.imo|default:"—" }}</p>
+    <p><strong>Saved:</strong> {{ vessel.created_at }}</p>
+
+    {% with p=vessel.latest_position %}
+      <h2>Latest Position</h2>
+
+      <p><strong>Latitude:</strong> {% if p %}{{ p.lat }}{% else %}—{% endif %}</p>
+      <p><strong>Longitude:</strong> {% if p %}{{ p.lng }}{% else %}—{% endif %}</p>
+      <p><strong>Speed Over Ground (SOG):</strong> {% if p and p.sog is not None %}{{ p.sog }}{% else %}—{% endif %}</p>
+      <p><strong>Course Over Ground (COG):</strong> {% if p and p.cog is not None %}{{ p.cog }}{% else %}—{% endif %}</p>
+      <p><strong>Position Timestamp:</strong> {% if p %}{{ p.ts }}{% else %}—{% endif %}</p>
+      <p><strong>Position Saved At:</strong> {% if p %}{{ p.created_at }}{% else %}—{% endif %}</p>
+    {% endwith %}
+
+    <h2>Location History</h2>
+    {% if vessel.locations.all %}
+      <table border="1" cellpadding="6" cellspacing="0" style="width:100%; max-width:1000px;">
+        <thead>
+          <tr>
+            <th>Timestamp</th>
+            <th>Lat</th>
+            <th>Lng</th>
+            <th>SOG</th>
+            <th>COG</th>
+            <th>Saved At</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for loc in vessel.locations.all %}
+            <tr>
+              <td>{{ loc.ts }}</td>
+              <td>{{ loc.lat }}</td>
+              <td>{{ loc.lng }}</td>
+              <td>{% if loc.sog is not None %}{{ loc.sog }}{% else %}—{% endif %}</td>
+              <td>{% if loc.cog is not None %}{{ loc.cog }}{% else %}—{% endif %}</td>
+              <td>{{ loc.created_at }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p>No saved positions yet.</p>
+    {% endif %}
+
+    <br>
+    <p>
+      <a href="{% url 'myvessels_edit' vessel.id %}">Edit vessel</a>
+      |
+      <a href="{% url 'myvessels' %}">Back to My Vessels</a>
+    </p>
   </div>
 </section>
 {% endblock %}
