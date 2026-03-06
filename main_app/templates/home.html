@@ -15,22 +15,42 @@
 ></div>
 
 <h2>Search by defining your bounding box</h2>
-<form id="searchForm">
+
+<form id="searchForm" method="post" action="{% url 'home' %}">
   {% csrf_token %}
 
   <label>
     Lat:
-    <input id="latInput" name="lat" type="number" step="any" required>
+    <input
+      id="latInput"
+      name="lat"
+      type="number"
+      step="any"
+      required
+      value="{{ submitted_lat|default:'' }}"
+    >
   </label>
 
   <label>
     Lon:
-    <input id="lonInput" name="lon" type="number" step="any" required>
+    <input
+      id="lonInput"
+      name="lon"
+      type="number"
+      step="any"
+      required
+      value="{{ submitted_lon|default:'' }}"
+    >
   </label>
 
   <label>
     Radius (nm):
-    <input name="radius_nm" type="number" step="any" value="10">
+    <input
+      name="radius_nm"
+      type="number"
+      step="any"
+      value="{{ submitted_radius_nm|default:'10' }}"
+    >
   </label>
 
   <button type="submit">Search</button>

@@ -7,6 +7,8 @@ from django.views.decorators.http import require_http_methods
 from django.contrib.auth import login
 from .forms import SavedVesselForm
 from django.db import IntegrityError
+from .services.marinesia import vessels_nearby_bbox, MarinesiaError
+from .api_views import radius_nm_to_bbox
 
 def signup(request):
     if request.method == "POST":
@@ -20,13 +22,56 @@ def signup(request):
 
     return render(request, "registration/signup.html", {"form": form})
 
+@login_required
 def home(request):
-    return render(request, "home.html")
+    results = []
+    error_message = None
+    lat = None
+    lon = None
+    radius_nm = 10
+
+    if request.method == "POST":
+        try:
+            lat = float(request.POST.get("lat"))
+            lon = float(request.POST.get("lon"))
+            radius_nm = float(request.POST.get("radius_nm", 10))
+        except (TypeError, ValueError):
+            error_message = "Please provide valid numeric values for lat, lon, and radius."
+        else:
+            if radius_nm <= 0 or radius_nm > 100:
+                error_message = "Radius must be between 0 and 100 nautical miles."
+            else:
+                lat_min, lat_max, lon_min, lon_max = radius_nm_to_bbox(lat, lon, radius_nm)
+                try:
+                    payload = vessels_nearby_bbox(lat_min, lat_max, lon_min, lon_max)
+                    results = payload.get("data", []) or []
+                except MarinesiaError as e:
+                    error_message = str(e)
+                except Exception as e:
+                    error_message = f"Unexpected error: {e}"
+
+    return render(
+        request,
+        "home.html",
+        {
+            "results": results,
+            "error_message": error_message,
+            "submitted_lat": lat,
+            "submitted_lon": lon,
+            "submitted_radius_nm": radius_nm,
+        },
+    )
+
 
 @login_required
 def my_vessels(request):
-    vessels = (SavedVessel.objects.filter(user=request.user).order_by("-created_at"))
+    vessels = (
+        SavedVessel.objects
+        .filter(user=request.user)
+        .order_by("-created_at")
+    )
     return render(request, "my_vessels.html", {"vessels": vessels})
+
 
 
 @login_required
