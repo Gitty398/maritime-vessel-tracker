@@ -117,6 +117,7 @@ header {
     object-fit: contain;
     display: block;
 }
+
 nav {
     margin-left: auto;
     display: flex;
