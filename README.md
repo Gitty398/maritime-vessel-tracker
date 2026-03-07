@@ -27,11 +27,10 @@ I created the Maritime Vessel Tracker to practice calling and ingesting APIs fro
 ## Getting Started
 
 ### Deployed App
-[Click here to use the Maritime Tracker App]()
+[Click here to use the Maritime Tracker App](https://maritime-vessel-tracker.onrender.com)
 
 ### Planning Materials
 - [Trello Board](https://trello.com/b/MVAwuplr/maritime-ais-tracker)
-- 
 
 ---
 
@@ -51,12 +50,14 @@ I created the Maritime Vessel Tracker to practice calling and ingesting APIs fro
 
 ## Attributions
 
-- OpenAI (ChatGPT) — logo generation and debugging
+- OpenAI (ChatGPT) — logo generation, error handling, and debugging
 - Leaflet - interactive map for assisting users in choosing a lat/long for the bounding box
 
 ---
 
 ## Next Steps / Stretch Goals
 
-- Add images to the Vessel Detail page
-- 
+- Add images and historical location tracks to the Vessel Detail page
+- Add a user's gps location to show relative location to other vessels
+- Overlay course-over-ground and speed-over-ground onto interactive map
+- Refine CSS
